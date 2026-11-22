@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int       @id @default(autoincrement()) @db.UnsignedInt
+  full_name  String?   @db.VarChar(255)
+  email      String    @unique(map: "users_email_unique") @db.VarChar(254)
+  password   String    @db.VarChar(255)
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+
+  @@map("users")
+}
+
+model Category {
+  id                  Int     @id @default(autoincrement())
+  baslik              String? @db.VarChar(222)
+  baslik_seo          String? @db.VarChar(222)
+  spot                String? @db.Text
+  dil                 String? @db.VarChar(22)
+  tags                String? @db.Text
+  meta_desc           String? @db.Text
+  ust_id              String? @db.VarChar(22)
+  sira                Int?
+  durum               String? @db.VarChar(2)
+  seo_url             String? @db.Text
+  marka_filtre        String? @db.VarChar(2)
+  ozellik_filtre      String? @db.VarChar(2)
+  fiyat_filtre        String? @db.VarChar(2)
+  n11_kat_id          String? @default("0") @db.VarChar(15)
+  n11_kat_isim        String? @db.Text
+  n11_ozellik         String? @db.Text
+  anasayfa            String? @default("1") @db.VarChar(1)
+  ikon                String? @db.Text
+  anasayfa_html       String? @db.Text
+  anasayfa_tur        String? @db.VarChar(1)
+  seo_desc            String? @db.Text
+  sopyo_id            String? @db.VarChar(255)
+  sopyo_status        Int?    @default(0)
+  sopyo_oran          Int?    @default(0)
+  kategori_oran_1     Int?
+  kategori_oran_5     Int?
+  kategori_oran_4     Int?
+  kategori_oran_3     Int?
+  kategori_oran_2     Int?
+  kategori_oran_6     Int?
+  kategori_oran_7     Int?
+  kategori_oran_8     Int?
+  kategori_oran_9     Int?
+  kategori_oran_10    Int?
+  kategori_oran_11    Int?
+  kategori_oran_12    Int?
+  kategori_oran_13    Int?
+  kategori_oran_15    Int?
+  kategori_oran_14    Int?
+  kategori_oran_16    Int?
+  kategori_oran_17    Int?
+  kategori_oran_10_20 Int?
+  n11_oran            Int?
+  hepsiburada_oran    Int?
+  pazarama_oran       Int?
+  trendyol_oran       Int?
+  ticimax_id          Int?
+
+  @@map("urun_cat")
+}
+
+model Brand {
+  id              Int     @id @default(autoincrement())
+  baslik          String? @db.VarChar(222)
+  baslik_seo      String? @db.VarChar(222)
+  seo_url         String? @db.Text
+  gorsel          String? @db.VarChar(222)
+  gorsel_anasayfa String? @db.VarChar(222)
+  spot            String? @db.Text
+  sira            Int?
+  durum           String? @db.VarChar(2)
+  anasayfa        String? @db.VarChar(2)
+  tags            String? @db.Text
+  meta_desc       String? @db.Text
+  sopyo_status    Int?
+  sopyo_id        Int?
+  ticimax_id      Int?
+
+  @@map("urun_marka")
+}
+
+model Supplier {
+  id                Int       @id @default(autoincrement())
+  name              String?   @db.VarChar(255)
+  status            Int?      @default(1)
+  discount          Int?      @default(0)
+  image_url         String?   @db.VarChar(255)
+  sira              Int?
+  token             String?   @db.Text
+  token_updated_at  DateTime? @db.Timestamp(0)
+  username          String?   @db.VarChar(255)
+  password          String?   @db.VarChar(255)
+  login_url         String?   @db.VarChar(500)
+  updated_at        DateTime? @default(now()) @db.Timestamp(0)
+  new_script_status Int?      @default(0)
+  euro_kur          Decimal?  @db.Decimal(10, 2)
+  dolar_kur         Decimal?  @db.Decimal(10, 2)
+
+  @@index([status], map: "idx_tedarikciler_status")
+  @@map("tedarikciler")
+}
+
+model Desi {
+  id    Int      @id @default(autoincrement())
+  name  String?  @db.VarChar(255)
+  price Decimal? @db.Decimal(10, 2)
+
+  @@map("desi")
+}
+
+model SpecificationGroup {
+  id         Int     @id @default(autoincrement())
+  baslik     String? @db.VarChar(222)
+  durum      String? @db.VarChar(2)
+  sira       Int?
+  ticimax_id Int?
+
+  @@map("urun_ozellik_grup")
+}
+
+model Specification {
+  id         Int     @id @default(autoincrement())
+  baslik     String? @db.VarChar(222)
+  grup_id    String? @db.VarChar(22)
+  sira       Int?
+  ticimax_id Int?
+
+  @@map("urun_ozellik")
+}
+
+model PriceTier {
+  id        Int     @id @default(autoincrement())
+  min_fiyat Decimal @db.Decimal(12, 2)
+  max_fiyat Decimal @db.Decimal(12, 2)
+  sira      Int     @default(0)
+
+  commissions CategoryCommission[]
+
+  @@map("fiyat_kademe")
+}
+
+model CategoryCommission {
+  id          Int @id @default(autoincrement())
+  kategori_id Int
+  kademe_id   Int
+  oran        Int @default(0)
+
+  tier PriceTier @relation(fields: [kademe_id], references: [id], onDelete: Cascade)
+
+  @@unique([kategori_id, kademe_id])
+  @@map("kategori_komisyon")
+}
+
+model Product {
+  id                   Int      @id @default(autoincrement())
+  sopyo_id             Int?
+  name                 String   @db.VarChar(255)
+  supplier             String?  @db.VarChar(255)
+  stock_code           String?  @db.VarChar(100)
+  brand                String?  @db.VarChar(255)
+  barcode              String?  @db.VarChar(100)
+  desi                 Decimal? @db.Decimal(10, 2)
+  eticaret             Boolean?
+  sopyo                Int?
+  attributes           String?  @db.Text
+  kategori_id          Int?
+  tedarikci_fiyat      Decimal? @db.Decimal(10, 2)
+  product_discount     Decimal? @db.Decimal(10, 2)
+  bolbolbul_fiyat      Decimal? @db.Decimal(10, 2)
+  sopyo_fiyat          Decimal? @db.Decimal(10, 2)
+  toplam_stock         Int?
+  bizimhesap_stock     Int?
+  bolbolbul_stock      Int?
+  sopyo_stock          Int?
+  meta_title           String?  @db.VarChar(255)
+  meta_desc            String?  @db.Text
+  detay_bilgileri      String?  @db.Text
+  tedarikci_product_id Int?
+  kdv                  Int?
+  images               String?  @db.Text
+  send_sopyo_check     Int?
+  send_eticaret_check  Int?
+  trendyol_fiyat       Decimal? @db.Decimal(10, 2)
+  n11_fiyat            Decimal? @db.Decimal(10, 2)
+  pazarama_fiyat       Decimal? @db.Decimal(10, 2)
+  hepsiburada_fiyat    Decimal? @db.Decimal(10, 2)
+  isFiyatTercih        Int?     @default(0)
+
+  @@map("products")
+}
+
+model SupplierProduct {
+  id                 Int      @id @default(autoincrement())
+  supplier_name      String?  @db.VarChar(255)
+  productTitle       String?  @db.VarChar(255)
+  productCode        String?  @unique(map: "idx_productCode") @db.VarChar(100)
+  netPriceWithVAT    Decimal? @db.Decimal(10, 2)
+  productPictures    String?  @db.Text
+  productStockStatus String?  @db.VarChar(50)
+  envanter_status    Int?     @default(0)
+  stock              Int?
+  brand              String?  @db.VarChar(255)
+  updated_at         DateTime @default(now()) @db.Timestamp(0)
+  bizimhesap_fiyat   Decimal? @db.Decimal(10, 2)
+  isFiyatTercih      Int?     @default(0)
+  bizimhesap_stock   Int?
+
+  @@map("tedarikci_urunler")
+}
+
+model Setting {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique(map: "settings_name_unique") @db.VarChar(255)
+  status     String?   @db.VarChar(255)
+  created_at DateTime? @default(now()) @db.Timestamp(0)
+  updated_at DateTime? @default(now()) @updatedAt @db.Timestamp(0)
+
+  @@map("settings")
+}
+
+model SupplierCron {
+  id                 Int       @id @default(autoincrement())
+  name               String?   @db.VarChar(255)
+  status             Int?
+  created_at         DateTime? @default(now()) @db.Timestamp(0)
+  error              String?   @db.Text
+  created_count      Int?      @default(0)
+  updated_count      Int?      @default(0)
+  time               String?   @db.VarChar(255)
+  total_count        Int?
+  exist_count        Int?
+  response_time      Decimal?  @default(0.00) @db.Decimal(10, 2)
+  error_category     String?   @db.VarChar(100)
+  products_processed Int?      @default(0)
+
+  @@index([created_at], map: "idx_tedarikci_cron_created_at")
+  @@index([name, status], map: "idx_tedarikci_cron_name_status")
+  @@map("tedarikci_cron")
+}
