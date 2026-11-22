@@ -1,0 +1,4 @@
+node_modules
+uploadedImages
+*.sql
+.DS_Store
