@@ -167,6 +167,15 @@ export interface Supplier {
   paymentTerms: string | null;
   notes: string | null;
   isActive: boolean;
+  discount: number;       // tedarikçi iskonto yüzdesi
+  euroKur: number | null; // EUR/TRY çevrim kuru
+  dolarKur: number | null; // USD/TRY çevrim kuru
+  sira: number | null;
+  token: string | null;   // B2B/scraping login cookie
+  tokenUpdatedAt: string | null; // Son token güncelleme zamanı
+  username: string | null; // B2B login kullanıcı adı
+  password: string | null; // B2B login şifresi
+  loginUrl: string | null; // B2B login URL
   createdAt: string;
   updatedAt: string;
   // Relations
@@ -288,148 +297,96 @@ export enum StockStatus {
 
 export interface Product {
   id: string;
-  autoIncrementId: number;
   name: string;
-  slug: string;
-  shortDescription: string | null;
-  description: string | null;
-  sku: string;
+  supplier: string | null;
+  stockCode: string | null;
+  brand: string | null;
   barcode: string | null;
-  gtinCode: string | null;
-  gtipCode: string | null;
-  identifierExists: boolean;
-  gtinSource: string | null;
-  basePrice: number;
-  costPrice: number | null;
-  discountRate: number;
-  discountedPrice: number | null;
-  transferDiscountRate: number;
-  taxRate: number;
-  profitMargin: number | null;
-  stock: number;
-  minStock: number;
-  maxStock: number | null;
-  stockStatus: StockStatus;
-  featuredImage: string | null;
-  videoUrl: string | null;
-  isActive: boolean;
-  isFeatured: boolean;
-  showInCategory: boolean;
-  showInShowcase: boolean;
-  showInBrandPage: boolean;
-  isTagFeatured: boolean;
-  brandId: string | null;
-  supplierId: string | null;
-  warrantyPeriod: number | null;
-  // Teslimat ve Lojistik
-  deliveryTime: number | null;
-  width: number | null;
-  height: number | null;
-  length: number | null;
   desi: number | null;
-  // Ödeme Seçenekleri
-  installmentEnabled: boolean;
-  // SEO
+  categoryId: string | null;
+  tedarikciProductId: string | null;
+  sopyoId: number | null;
+  // Fiyatlar
+  tedarikciFiyat: number | null;
+  productDiscount: number | null;
+  bolbolbulFiyat: number | null;
+  sopyoFiyat: number | null;
+  n11Fiyat: number | null;
+  trendyolFiyat: number | null;
+  hepsiburadaFiyat: number | null;
+  pazaramaFiyat: number | null;
+  // Stok
+  toplamStock: number | null;
+  bolbolbulStock: number | null;
+  sopyoStock: number | null;
+  bizimhesapStock: number | null;
+  // Durum
+  kdv: number | null;
+  eticaret: boolean;
+  sopyo: boolean;
+  sendSopyoCheck: boolean;
+  sendEticaretCheck: boolean;
+  isFiyatTercih: boolean;
+  // Hesaplanmış: send_eticaret_check === 1 OR eticaret === true
+  isActive: boolean;
+  // SEO & İçerik
   metaTitle: string | null;
   metaDescription: string | null;
-  metaKeywords: string | null;
-  canonicalUrl: string | null;
-  ogTitle: string | null;
-  ogDescription: string | null;
-  ogImage: string | null;
-  twitterCard: string | null;
-  twitterTitle: string | null;
-  twitterDescription: string | null;
-  twitterImage: string | null;
-  createdAt: string;
-  updatedAt: string;
-  publishedAt: string | null;
-  // Relations
-  brand?: Brand | null;
-  supplier?: Supplier | null;
-  categories?: ProductCategory[];
-  images?: ProductImage[];
-  dealerPrices?: ProductDealerPrice[];
-  _count?: {
-    categories: number;
-    images: number;
-    dealerPrices: number;
-  };
+  detayBilgileri: string | null;
+  // JSON alanları
+  attributes: { Name: string; Value: string }[];
+  images: string[];
 }
 
 export interface CreateProductDto {
   name: string;
-  shortDescription?: string;
-  description?: string;
-  sku?: string;
+  supplier?: string;
+  stockCode?: string;
+  brand?: string;
   barcode?: string;
-  gtinCode?: string;
-  gtipCode?: string;
-  identifierExists?: boolean;
-  gtinSource?: string;
-  basePrice: number;
-  costPrice?: number;
-  discountRate?: number;
-  discountedPrice?: number;
-  transferDiscountRate?: number;
-  taxRate?: number;
-  profitMargin?: number;
-  stock: number;
-  minStock?: number;
-  maxStock?: number;
-  featuredImage?: string;
-  videoUrl?: string;
-  isActive?: boolean;
-  isFeatured?: boolean;
-  brandId?: string;
-  supplierId?: string;
-  warrantyPeriod?: number;
-  // Teslimat ve Lojistik
-  deliveryTime?: number;
-  width?: number;
-  height?: number;
-  length?: number;
-  // Ödeme Seçenekleri
-  installmentEnabled?: boolean;
-  categoryIds?: string[];
-  // SEO
+  desi?: number;
+  categoryId?: string;
+  tedarikciProductId?: string;
+  tedarikciFiyat?: number;
+  productDiscount?: number;
+  bolbolbulFiyat?: number;
+  sopyoFiyat?: number;
+  n11Fiyat?: number;
+  trendyolFiyat?: number;
+  hepsiburadaFiyat?: number;
+  pazaramaFiyat?: number;
+  toplamStock?: number;
+  bolbolbulStock?: number;
+  sopyoStock?: number;
+  kdv?: number;
+  eticaret?: boolean;
+  sopyo?: boolean;
+  isFiyatTercih?: boolean;
   metaTitle?: string;
   metaDescription?: string;
-  metaKeywords?: string;
-  canonicalUrl?: string;
-  ogTitle?: string;
-  ogDescription?: string;
-  ogImage?: string;
-  twitterCard?: string;
-  twitterTitle?: string;
-  twitterDescription?: string;
-  twitterImage?: string;
-  // Dealer prices
-  dealerPrices?: {
-    dealerClassId: string;
-    price: number;
-  }[];
+  detayBilgileri?: string;
+  attributes?: { Name: string; Value: string }[];
+  images?: string[];
 }
 
 export interface UpdateProductDto extends Partial<CreateProductDto> {}
 
 export interface UpdateProductStockDto {
-  stock: number;
+  toplamStock: number;
+  bolbolbulStock?: number;
+  sopyoStock?: number;
 }
 
 export interface ProductFilters {
   page?: number;
   limit?: number;
   search?: string;
-  brandId?: string;
-  supplierId?: string;
+  supplier?: string;
   categoryId?: string;
-  stockStatus?: StockStatus;
-  isActive?: boolean;
-  isFeatured?: boolean;
+  stockStatus?: 'in_stock' | 'out_of_stock';
   minPrice?: number;
   maxPrice?: number;
-  sortBy?: 'createdAt' | 'name' | 'basePrice' | 'stock';
+  sortBy?: 'name' | 'tedarikciFiyat' | 'toplamStock';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -877,4 +834,89 @@ export interface ReorderMenuItemsDto {
     order: number;
     parentId?: string | null;
   }>;
+}
+
+// ============= SPECIFICATION TYPES =============
+
+export interface SpecGroupFrontend {
+  id: string;
+  name: string;
+  isActive: boolean;
+  order: number;
+}
+
+export interface SpecificationFrontend {
+  id: string;
+  name: string;
+  isGroup: boolean;
+  isActive: boolean;
+  order: number;
+  productCount: number;
+  children?: SpecificationFrontend[];
+}
+
+// ============= SUPPLIER LOG TYPES =============
+
+export interface SupplierLogFrontend {
+  id: string;
+  supplierName: string;
+  status: 'success' | 'error' | 'warning' | 'pending';
+  createdAt: string;
+  error: string | null;
+  createdCount: number;
+  updatedCount: number;
+  time: string | null;
+  totalCount: number;
+  existCount: number;
+  responseTime: number;
+  errorCategory: string | null;
+  productsProcessed: number;
+}
+
+// ============= DESI TYPES =============
+
+export interface DesiFrontend {
+  id: string;
+  name: string;
+  price: number;
+}
+
+// ============= PRICE TIER & COMMISSION TYPES =============
+
+export interface PriceTier {
+  id: string;
+  minPrice: number;
+  maxPrice: number;
+  order: number;
+}
+
+export interface CommissionTier {
+  tierId: string;
+  minPrice: number;
+  maxPrice: number;
+  rate: number;
+}
+
+export interface MarketplaceRates {
+  n11: number;
+  trendyol: number;
+  hepsiburada: number;
+  pazarama: number;
+  sopyo: number;
+}
+
+export interface CommissionData {
+  categoryId: string;
+  categoryName: string;
+  marketplaceRates: MarketplaceRates;
+  tiers: CommissionTier[];
+}
+
+export interface UpdateCommissionsDto {
+  marketplaceRates: MarketplaceRates;
+  tiers: { tierId: string; rate: number }[];
+}
+
+export interface BulkUpdateCommissionsDto extends UpdateCommissionsDto {
+  categoryIds: string[];
 }

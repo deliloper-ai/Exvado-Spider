@@ -1,7 +1,9 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
+import { brandService, aiService } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -63,28 +65,61 @@ type Brand = {
   logo?: string
 }
 
-// Örnek marka verileri
-const SAMPLE_BRANDS: Brand[] = [
-  { id: "1", name: "ErgoMax", slug: "ergomax", isActive: true, productCount: 45, order: 1 },
-  { id: "2", name: "TechGear", slug: "techgear", isActive: true, productCount: 128, order: 2 },
-  { id: "3", name: "HomeComfort", slug: "homecomfort", isActive: true, productCount: 67, order: 3 },
-  { id: "4", name: "SportPro", slug: "sportpro", isActive: false, productCount: 0, order: 4 },
-  { id: "5", name: "EcoGreen", slug: "ecogreen", isActive: true, productCount: 89, order: 5 },
-  { id: "6", name: "SmartHome", slug: "smarthome", isActive: true, productCount: 156, order: 6 },
-  { id: "7", name: "FitLife", slug: "fitlife", isActive: true, productCount: 34, order: 7 },
-  { id: "8", name: "AudioMax", slug: "audiomax", isActive: true, productCount: 78, order: 8 },
-  { id: "9", name: "GardenPro", slug: "gardenpro", isActive: true, productCount: 92, order: 9 },
-  { id: "10", name: "KitchenMaster", slug: "kitchenmaster", isActive: false, productCount: 5, order: 10 },
-]
+// API'den yüklenecek
 
 export default function BrandsPage() {
-  const [brands, setBrands] = useState<Brand[]>(SAMPLE_BRANDS)
+  const { toast } = useToast()
+  const [brands, setBrands] = useState<Brand[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [editModal, setEditModal] = useState<{ open: boolean; brand: Brand | null }>({ open: false, brand: null })
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; brandId: string | null }>({ open: false, brandId: null })
   const [addModal, setAddModal] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [addForm, setAddForm] = useState({ name: '', isActive: true, metaTitle: '', metaDescription: '' })
+  const [editForm, setEditForm] = useState({ name: '', isActive: true, metaTitle: '', metaDescription: '' })
+  const [aiGenerating, setAiGenerating] = useState<string | null>(null)
+
+  const fetchBrands = useCallback(async () => {
+    try {
+      setLoading(true)
+      const response = await brandService.getAll()
+      if (response.success && response.data) {
+        setBrands(response.data.map((b: any) => ({
+          id: b.id,
+          name: b.name,
+          slug: b.slug || '',
+          isActive: b.isActive ?? true,
+          productCount: 0,
+          order: b.order ?? 0,
+          metaTitle: b.metaTitle,
+          metaDescription: b.metaDescription,
+          logo: b.logo,
+        })))
+      }
+    } catch {
+      toast({ title: "Hata", description: "Markalar yüklenemedi", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    fetchBrands()
+  }, [fetchBrands])
+
+  // Edit modal açıldığında editForm'u doldur
+  useEffect(() => {
+    if (editModal.open && editModal.brand) {
+      setEditForm({
+        name: editModal.brand.name,
+        isActive: editModal.brand.isActive,
+        metaTitle: editModal.brand.metaTitle || '',
+        metaDescription: editModal.brand.metaDescription || '',
+      })
+    }
+  }, [editModal.open, editModal.brand])
 
   // Filtrelenmiş markalar
   const filteredBrands = searchTerm
@@ -309,7 +344,10 @@ export default function BrandsPage() {
         </div>
 
         {/* Add Brand Sheet */}
-        <Sheet open={addModal} onOpenChange={setAddModal}>
+        <Sheet open={addModal} onOpenChange={(open) => {
+          setAddModal(open)
+          if (!open) setAddForm({ name: '', isActive: true, metaTitle: '', metaDescription: '' })
+        }}>
           <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
             <SheetHeader className="sr-only">
               <SheetTitle>Yeni Marka Ekle</SheetTitle>
@@ -325,6 +363,8 @@ export default function BrandsPage() {
                   <Label htmlFor="add-name" className="text-xs">Marka Adı</Label>
                   <Input
                     id="add-name"
+                    value={addForm.name}
+                    onChange={(e) => setAddForm(prev => ({ ...prev, name: e.target.value }))}
                     className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                     placeholder="Marka adını girin"
                   />
@@ -334,7 +374,8 @@ export default function BrandsPage() {
                   <Label htmlFor="add-active" className="text-xs font-medium">Marka Durumu</Label>
                   <Switch
                     id="add-active"
-                    defaultChecked={true}
+                    checked={addForm.isActive}
+                    onCheckedChange={(checked) => setAddForm(prev => ({ ...prev, isActive: checked }))}
                     className="scale-125 data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-purple-500 data-[state=checked]:via-violet-500 data-[state=checked]:to-indigo-500"
                   />
                 </div>
@@ -353,14 +394,33 @@ export default function BrandsPage() {
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                      disabled={aiGenerating === 'add-meta'}
+                      onClick={async () => {
+                        if (!addForm.name.trim()) {
+                          toast({ title: "Uyarı", description: "Önce marka adını girin", variant: "destructive" })
+                          return
+                        }
+                        setAiGenerating('add-meta')
+                        try {
+                          const result = await aiService.generateBrandMeta(addForm.name)
+                          setAddForm(prev => ({ ...prev, metaTitle: result.title, metaDescription: result.description }))
+                          toast({ title: "Başarılı", description: "Meta bilgileri AI ile oluşturuldu" })
+                        } catch (err: any) {
+                          toast({ title: "Hata", description: err.message || "AI ile oluşturulamadı", variant: "destructive" })
+                        } finally {
+                          setAiGenerating(null)
+                        }
+                      }}
+                      className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 disabled:opacity-50"
                     >
                       <Sparkles className="h-3 w-3 mr-1" />
-                      AI ile Oluştur
+                      {aiGenerating === 'add-meta' ? 'Oluşturuluyor...' : 'AI ile Oluştur'}
                     </Button>
                   </div>
                   <Input
                     id="add-meta-title"
+                    value={addForm.metaTitle}
+                    onChange={(e) => setAddForm(prev => ({ ...prev, metaTitle: e.target.value }))}
                     className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                     placeholder="SEO için meta başlık girin"
                     maxLength={60}
@@ -377,14 +437,33 @@ export default function BrandsPage() {
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                      disabled={aiGenerating === 'add-meta'}
+                      onClick={async () => {
+                        if (!addForm.name.trim()) {
+                          toast({ title: "Uyarı", description: "Önce marka adını girin", variant: "destructive" })
+                          return
+                        }
+                        setAiGenerating('add-meta')
+                        try {
+                          const result = await aiService.generateBrandMeta(addForm.name)
+                          setAddForm(prev => ({ ...prev, metaTitle: result.title, metaDescription: result.description }))
+                          toast({ title: "Başarılı", description: "Meta bilgileri AI ile oluşturuldu" })
+                        } catch (err: any) {
+                          toast({ title: "Hata", description: err.message || "AI ile oluşturulamadı", variant: "destructive" })
+                        } finally {
+                          setAiGenerating(null)
+                        }
+                      }}
+                      className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 disabled:opacity-50"
                     >
                       <Sparkles className="h-3 w-3 mr-1" />
-                      AI ile Oluştur
+                      {aiGenerating === 'add-meta' ? 'Oluşturuluyor...' : 'AI ile Oluştur'}
                     </Button>
                   </div>
                   <Textarea
                     id="add-meta-desc"
+                    value={addForm.metaDescription}
+                    onChange={(e) => setAddForm(prev => ({ ...prev, metaDescription: e.target.value }))}
                     className="text-xs min-h-[80px] resize-none bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                     placeholder="SEO için meta açıklama girin"
                     maxLength={160}
@@ -416,7 +495,17 @@ export default function BrandsPage() {
         </Sheet>
 
         {/* Edit Brand Sheet */}
-        <Sheet open={editModal.open} onOpenChange={(open) => setEditModal({ open, brand: null })}>
+        <Sheet open={editModal.open} onOpenChange={(open) => {
+          if (open && editModal.brand) {
+            setEditForm({
+              name: editModal.brand.name,
+              isActive: editModal.brand.isActive,
+              metaTitle: editModal.brand.metaTitle || '',
+              metaDescription: editModal.brand.metaDescription || '',
+            })
+          }
+          if (!open) setEditModal({ open: false, brand: null })
+        }}>
           <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
             <SheetHeader className="sr-only">
               <SheetTitle>Marka Düzenle</SheetTitle>
@@ -433,7 +522,7 @@ export default function BrandsPage() {
                     <Label htmlFor="edit-name" className="text-xs">Marka Adı</Label>
                     <Input
                       id="edit-name"
-                      defaultValue={editModal.brand.name}
+                      value={editForm.name}
                       className="text-xs bg-gray-100 dark:bg-gray-800 border-gray-300 dark:border-gray-600 cursor-not-allowed"
                       placeholder="Marka adını girin"
                       disabled
@@ -444,7 +533,8 @@ export default function BrandsPage() {
                     <Label htmlFor="edit-active" className="text-xs font-medium">Marka Durumu</Label>
                     <Switch
                       id="edit-active"
-                      defaultChecked={editModal.brand.isActive}
+                      checked={editForm.isActive}
+                      onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isActive: checked }))}
                       className="scale-125 data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-purple-500 data-[state=checked]:via-violet-500 data-[state=checked]:to-indigo-500"
                     />
                   </div>
@@ -463,15 +553,33 @@ export default function BrandsPage() {
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                        disabled={aiGenerating === 'edit-meta'}
+                        onClick={async () => {
+                          if (!editForm.name.trim()) {
+                            toast({ title: "Uyarı", description: "Marka adı boş", variant: "destructive" })
+                            return
+                          }
+                          setAiGenerating('edit-meta')
+                          try {
+                            const result = await aiService.generateBrandMeta(editForm.name)
+                            setEditForm(prev => ({ ...prev, metaTitle: result.title, metaDescription: result.description }))
+                            toast({ title: "Başarılı", description: "Meta bilgileri AI ile oluşturuldu" })
+                          } catch (err: any) {
+                            toast({ title: "Hata", description: err.message || "AI ile oluşturulamadı", variant: "destructive" })
+                          } finally {
+                            setAiGenerating(null)
+                          }
+                        }}
+                        className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 disabled:opacity-50"
                       >
                         <Sparkles className="h-3 w-3 mr-1" />
-                        AI ile Oluştur
+                        {aiGenerating === 'edit-meta' ? 'Oluşturuluyor...' : 'AI ile Oluştur'}
                       </Button>
                     </div>
                     <Input
                       id="edit-meta-title"
-                      defaultValue={editModal.brand.metaTitle || ""}
+                      value={editForm.metaTitle}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, metaTitle: e.target.value }))}
                       className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                       placeholder="SEO için meta başlık girin"
                       maxLength={60}
@@ -488,15 +596,33 @@ export default function BrandsPage() {
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                        disabled={aiGenerating === 'edit-meta'}
+                        onClick={async () => {
+                          if (!editForm.name.trim()) {
+                            toast({ title: "Uyarı", description: "Marka adı boş", variant: "destructive" })
+                            return
+                          }
+                          setAiGenerating('edit-meta')
+                          try {
+                            const result = await aiService.generateBrandMeta(editForm.name)
+                            setEditForm(prev => ({ ...prev, metaTitle: result.title, metaDescription: result.description }))
+                            toast({ title: "Başarılı", description: "Meta bilgileri AI ile oluşturuldu" })
+                          } catch (err: any) {
+                            toast({ title: "Hata", description: err.message || "AI ile oluşturulamadı", variant: "destructive" })
+                          } finally {
+                            setAiGenerating(null)
+                          }
+                        }}
+                        className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 disabled:opacity-50"
                       >
                         <Sparkles className="h-3 w-3 mr-1" />
-                        AI ile Oluştur
+                        {aiGenerating === 'edit-meta' ? 'Oluşturuluyor...' : 'AI ile Oluştur'}
                       </Button>
                     </div>
                     <Textarea
                       id="edit-meta-desc"
-                      defaultValue={editModal.brand.metaDescription || ""}
+                      value={editForm.metaDescription}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, metaDescription: e.target.value }))}
                       className="text-xs min-h-[80px] resize-none bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                       placeholder="SEO için meta açıklama girin"
                       maxLength={160}

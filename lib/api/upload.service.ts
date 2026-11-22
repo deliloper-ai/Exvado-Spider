@@ -1,15 +1,25 @@
 /**
  * Upload API Service
+ * Tüm yükleme endpoint'leri /api/upload altında çalışır.
+ * Yanıtlar standart ApiResponse<T> formatındadır: { success, data: { message, data } }
  */
 
 import { api } from './client';
 import type {
-  UploadResponse,
+  UploadedFile,
+  ThumbnailUrls,
+  ProductImage,
   ReorderImagesDto,
   ApiResponse,
 } from './types';
 
 const BASE_URL = '/api/upload';
+
+/** Standart API zarfından iç data'yı çıkar */
+interface UploadEnvelope<T> {
+  message: string;
+  data: T;
+}
 
 export const uploadService = {
   /**
@@ -19,12 +29,12 @@ export const uploadService = {
     file: File,
     uploadType: 'product' | 'brand' | 'category' | 'temp' = 'temp',
     onProgress?: (progress: number) => void
-  ): Promise<UploadResponse> => {
+  ): Promise<ApiResponse<UploadEnvelope<UploadedFile>>> => {
     const formData = new FormData();
     formData.append('image', file);
     formData.append('uploadType', uploadType);
 
-    return api.upload<UploadResponse>(`${BASE_URL}/image`, formData, onProgress);
+    return api.upload<ApiResponse<UploadEnvelope<UploadedFile>>>(`${BASE_URL}/image`, formData, onProgress);
   },
 
   /**
@@ -34,14 +44,14 @@ export const uploadService = {
     files: File[],
     uploadType: 'product' | 'brand' | 'category' | 'temp' = 'temp',
     onProgress?: (progress: number) => void
-  ): Promise<UploadResponse> => {
+  ): Promise<ApiResponse<UploadEnvelope<UploadedFile[]>>> => {
     const formData = new FormData();
     files.forEach((file) => {
       formData.append('images', file);
     });
     formData.append('uploadType', uploadType);
 
-    return api.upload<UploadResponse>(`${BASE_URL}/images`, formData, onProgress);
+    return api.upload<ApiResponse<UploadEnvelope<UploadedFile[]>>>(`${BASE_URL}/images`, formData, onProgress);
   },
 
   /**
@@ -52,13 +62,13 @@ export const uploadService = {
     quality: number = 80,
     uploadType: 'product' | 'brand' | 'category' | 'temp' = 'temp',
     onProgress?: (progress: number) => void
-  ): Promise<UploadResponse> => {
+  ): Promise<ApiResponse<UploadEnvelope<UploadedFile>>> => {
     const formData = new FormData();
     formData.append('image', file);
     formData.append('uploadType', uploadType);
     formData.append('quality', String(quality));
 
-    return api.upload<UploadResponse>(`${BASE_URL}/optimize`, formData, onProgress);
+    return api.upload<ApiResponse<UploadEnvelope<UploadedFile>>>(`${BASE_URL}/optimize`, formData, onProgress);
   },
 
   /**
@@ -68,12 +78,12 @@ export const uploadService = {
     file: File,
     uploadType: 'product' | 'brand' | 'category' | 'temp' = 'temp',
     onProgress?: (progress: number) => void
-  ): Promise<UploadResponse> => {
+  ): Promise<ApiResponse<UploadEnvelope<ThumbnailUrls>>> => {
     const formData = new FormData();
     formData.append('image', file);
     formData.append('uploadType', uploadType);
 
-    return api.upload<UploadResponse>(`${BASE_URL}/thumbnails`, formData, onProgress);
+    return api.upload<ApiResponse<UploadEnvelope<ThumbnailUrls>>>(`${BASE_URL}/thumbnails`, formData, onProgress);
   },
 
   /**
@@ -84,7 +94,7 @@ export const uploadService = {
     files: File[],
     altText?: string,
     onProgress?: (progress: number) => void
-  ): Promise<UploadResponse> => {
+  ): Promise<ApiResponse<UploadEnvelope<ProductImage[]>>> => {
     const formData = new FormData();
     files.forEach((file) => {
       formData.append('images', file);
@@ -93,7 +103,7 @@ export const uploadService = {
       formData.append('altText', altText);
     }
 
-    return api.upload<UploadResponse>(
+    return api.upload<ApiResponse<UploadEnvelope<ProductImage[]>>>(
       `${BASE_URL}/product/${productId}/images`,
       formData,
       onProgress
@@ -103,14 +113,14 @@ export const uploadService = {
   /**
    * Ürün görselini sil
    */
-  deleteProductImage: async (imageId: string): Promise<ApiResponse<void>> => {
-    return api.delete<ApiResponse<void>>(`${BASE_URL}/product/image/${imageId}`);
+  deleteProductImage: async (imageId: string): Promise<ApiResponse<{ message: string }>> => {
+    return api.delete<ApiResponse<{ message: string }>>(`${BASE_URL}/product/image/${imageId}`);
   },
 
   /**
    * Ürün görsellerini yeniden sırala
    */
-  reorderProductImages: async (productId: string, data: ReorderImagesDto): Promise<ApiResponse<void>> => {
-    return api.post<ApiResponse<void>>(`${BASE_URL}/product/${productId}/reorder`, data);
+  reorderProductImages: async (productId: string, data: ReorderImagesDto): Promise<ApiResponse<UploadEnvelope<ProductImage[]>>> => {
+    return api.post<ApiResponse<UploadEnvelope<ProductImage[]>>>(`${BASE_URL}/product/${productId}/reorder`, data);
   },
 };

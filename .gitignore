@@ -33,9 +33,23 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Google service account credentials
+credentials.json
+
+# Worker logs
+worker/logs/*
+!worker/logs/.gitkeep
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local-only scripts with hardcoded credentials
+_civ-update-pwd.mjs
+civ-prod-test.mjs
+
+# Claude Code config
+.claude/

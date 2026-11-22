@@ -70,4 +70,38 @@ export const productService = {
   updateStock: async (id: string, data: UpdateProductStockDto): Promise<ApiResponse<Product>> => {
     return api.patch<ApiResponse<Product>>(`${BASE_URL}/${id}/stock`, data);
   },
+
+  /**
+   * Tek ürün için fiyat hesapla
+   * desi veya kategori değiştiğinde frontend'den çağrılır
+   */
+  calculatePrice: async (data: {
+    tedarikciFiyat: number;
+    categoryId: string;
+    supplierDiscount?: number;
+    desiPrice?: number;
+  }): Promise<ApiResponse<{
+    baseFiyat: number;
+    kategoriOran: number;
+    bolbolbulFiyat: number;
+    sopyoFiyat: number;
+    n11Fiyat: number;
+    trendyolFiyat: number;
+    hepsiburadaFiyat: number;
+    pazaramaFiyat: number;
+  }>> => {
+    return api.post(`${BASE_URL}/calculate-price`, data);
+  },
+
+  /**
+   * Tüm ürünlerin fiyatlarını yeniden hesapla
+   */
+  recalculateAll: async (): Promise<ApiResponse<{
+    message: string;
+    updated: number;
+    skipped: number;
+    total: number;
+  }>> => {
+    return api.post(`${BASE_URL}/recalculate-all`);
+  },
 };

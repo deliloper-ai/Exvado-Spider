@@ -1,7 +1,9 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
+import { desiService } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -66,17 +68,14 @@ type CargoCompany = {
   logo?: string
 }
 
-// Desi Fiyatlandırma tipi
+// Desi Fiyatlandırma tipi (DB'den)
 type DesiPricing = {
   id: string
-  cargoCompanyId: string
-  minDesi: number
-  maxDesi: number
-  fixedPrice: number // Sabit fiyat
-  isActive: boolean
+  name: string
+  price: number
 }
 
-// Kargo şirketleri
+// Kargo Şirketleri (yerel — DB'de yok)
 const CARGO_COMPANIES: CargoCompany[] = [
   {
     id: "1",
@@ -115,50 +114,39 @@ const CARGO_COMPANIES: CargoCompany[] = [
   },
 ]
 
-// Desi fiyatlandırmaları
-const DESI_PRICINGS: DesiPricing[] = [
-  // Yurtiçi Kargo
-  { id: "1-1", cargoCompanyId: "1", minDesi: 0, maxDesi: 1, fixedPrice: 25, isActive: true },
-  { id: "1-2", cargoCompanyId: "1", minDesi: 1, maxDesi: 3, fixedPrice: 45, isActive: true },
-  { id: "1-3", cargoCompanyId: "1", minDesi: 3, maxDesi: 5, fixedPrice: 65, isActive: true },
-  { id: "1-4", cargoCompanyId: "1", minDesi: 5, maxDesi: 10, fixedPrice: 95, isActive: true },
-  { id: "1-5", cargoCompanyId: "1", minDesi: 10, maxDesi: 20, fixedPrice: 165, isActive: true },
-  { id: "1-6", cargoCompanyId: "1", minDesi: 20, maxDesi: 99999, fixedPrice: 280, isActive: true },
-
-  // Aras Kargo
-  { id: "2-1", cargoCompanyId: "2", minDesi: 0, maxDesi: 1, fixedPrice: 28, isActive: true },
-  { id: "2-2", cargoCompanyId: "2", minDesi: 1, maxDesi: 3, fixedPrice: 50, isActive: true },
-  { id: "2-3", cargoCompanyId: "2", minDesi: 3, maxDesi: 5, fixedPrice: 70, isActive: true },
-  { id: "2-4", cargoCompanyId: "2", minDesi: 5, maxDesi: 10, fixedPrice: 105, isActive: true },
-  { id: "2-5", cargoCompanyId: "2", minDesi: 10, maxDesi: 20, fixedPrice: 180, isActive: true },
-  { id: "2-6", cargoCompanyId: "2", minDesi: 20, maxDesi: 99999, fixedPrice: 310, isActive: true },
-
-  // MNG Kargo
-  { id: "3-1", cargoCompanyId: "3", minDesi: 0, maxDesi: 1, fixedPrice: 22, isActive: true },
-  { id: "3-2", cargoCompanyId: "3", minDesi: 1, maxDesi: 3, fixedPrice: 40, isActive: true },
-  { id: "3-3", cargoCompanyId: "3", minDesi: 3, maxDesi: 5, fixedPrice: 58, isActive: true },
-  { id: "3-4", cargoCompanyId: "3", minDesi: 5, maxDesi: 10, fixedPrice: 85, isActive: true },
-  { id: "3-5", cargoCompanyId: "3", minDesi: 10, maxDesi: 20, fixedPrice: 145, isActive: true },
-  { id: "3-6", cargoCompanyId: "3", minDesi: 20, maxDesi: 99999, fixedPrice: 240, isActive: true },
-
-  // PTT Kargo
-  { id: "4-1", cargoCompanyId: "4", minDesi: 0, maxDesi: 1, fixedPrice: 30, isActive: true },
-  { id: "4-2", cargoCompanyId: "4", minDesi: 1, maxDesi: 3, fixedPrice: 55, isActive: true },
-  { id: "4-3", cargoCompanyId: "4", minDesi: 3, maxDesi: 5, fixedPrice: 78, isActive: true },
-  { id: "4-4", cargoCompanyId: "4", minDesi: 5, maxDesi: 10, fixedPrice: 115, isActive: true },
-  { id: "4-5", cargoCompanyId: "4", minDesi: 10, maxDesi: 20, fixedPrice: 195, isActive: true },
-  { id: "4-6", cargoCompanyId: "4", minDesi: 20, maxDesi: 99999, fixedPrice: 340, isActive: true },
-]
-
 export default function DesiPage() {
+  const { toast } = useToast()
   const [cargoCompanies, setCargoCompanies] = useState<CargoCompany[]>(CARGO_COMPANIES)
-  const [desiPricings, setDesiPricings] = useState<DesiPricing[]>(DESI_PRICINGS)
+  const [desiPricings, setDesiPricings] = useState<DesiPricing[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCompany, setSelectedCompany] = useState<string>("1")
   const [editPricingModal, setEditPricingModal] = useState<{ open: boolean; pricing: DesiPricing | null }>({ open: false, pricing: null })
   const [addPricingModal, setAddPricingModal] = useState<{ open: boolean; companyId: string | null }>({ open: false, companyId: null })
   const [editCompanyModal, setEditCompanyModal] = useState<{ open: boolean; company: CargoCompany | null }>({ open: false, company: null })
   const [deletePricingModal, setDeletePricingModal] = useState<{ open: boolean; pricingId: string | null }>({ open: false, pricingId: null })
+
+  const fetchDesiPricings = useCallback(async () => {
+    try {
+      setLoading(true)
+      const response = await desiService.getAll()
+      if (response.success && response.data) {
+        setDesiPricings(response.data.map(d => ({
+          id: d.id,
+          name: d.name,
+          price: d.price,
+        })))
+      }
+    } catch {
+      toast({ title: "Hata", description: "Desi verileri yüklenemedi", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    fetchDesiPricings()
+  }, [fetchDesiPricings])
 
   // Pagination state for pricing table
   const [currentPage, setCurrentPage] = useState(1)
@@ -177,8 +165,8 @@ export default function DesiPage() {
       )
     : cargoCompanies
 
-  // Seçili şirketin fiyatlandırmaları
-  const selectedCompanyPricings = desiPricings.filter(p => p.cargoCompanyId === selectedCompany)
+  // Tüm desi fiyatlandırmaları (DB'den)
+  const selectedCompanyPricings = desiPricings
 
   // Desi hesapla
   const calculateDesi = () => {
@@ -205,11 +193,17 @@ export default function DesiPage() {
     ))
   }
 
-  // Fiyatlandırmayı aktif/pasif yap
-  const handleTogglePricing = (pricingId: string) => {
-    setDesiPricings(desiPricings.map(pricing =>
-      pricing.id === pricingId ? { ...pricing, isActive: !pricing.isActive } : pricing
-    ))
+  // Desi silme handler
+  const handleDeleteDesi = async (pricingId: string) => {
+    try {
+      const response = await desiService.delete(pricingId)
+      if (response.success) {
+        setDesiPricings(prev => prev.filter(p => p.id !== pricingId))
+        toast({ title: "Başarılı", description: "Desi fiyatı silindi" })
+      }
+    } catch {
+      toast({ title: "Hata", description: "Desi silinemedi", variant: "destructive" })
+    }
   }
 
   // İstatistikler
@@ -217,13 +211,8 @@ export default function DesiPage() {
     totalCompanies: cargoCompanies.length,
     activeCompanies: cargoCompanies.filter(c => c.isActive).length,
     totalPricings: desiPricings.length,
-    activePricings: desiPricings.filter(p => p.isActive).length,
+    activePricings: desiPricings.length,
   }
-
-  // Get unique desi ranges for pagination
-  const uniqueRanges = Array.from(new Set(desiPricings.map(p => `${p.minDesi}-${p.maxDesi}`)))
-  const totalPages = Math.ceil(uniqueRanges.length / itemsPerPage)
-  const paginatedRanges = uniqueRanges.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
 
   return (
     <MainLayout>
@@ -316,33 +305,24 @@ export default function DesiPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedCompanyPricings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((pricing, idx) => {
-                      const absoluteIdx = (currentPage - 1) * itemsPerPage + idx
-                      return (
+                    {selectedCompanyPricings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((pricing) => (
                         <TableRow
                           key={pricing.id}
                           className="border-b dark:border-gray-700 hover:bg-blue-50/30 dark:hover:bg-gray-700/50 transition-colors"
                         >
                           <TableCell className="text-xs text-center text-gray-900 dark:text-gray-100 py-2 h-12">
-                            {absoluteIdx + 1}
+                            {pricing.name}
                           </TableCell>
                           <TableCell className="text-xs text-center text-gray-900 dark:text-gray-100 py-2 h-12">
                             <span className="font-semibold text-green-600 dark:text-green-400">
-                              ₺{pricing.fixedPrice.toFixed(2)}
+                              ₺{pricing.price.toFixed(2)}
                             </span>
                           </TableCell>
                           <TableCell className="py-2 h-12 text-center">
-                            {pricing.isActive ? (
-                              <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700">
-                                <Eye className="h-3 w-3 mr-1" />
-                                Aktif
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-300 dark:border-red-700">
-                                <EyeOff className="h-3 w-3 mr-1" />
-                                Pasif
-                              </Badge>
-                            )}
+                            <Badge variant="outline" className="text-[10px] px-2 py-0.5 h-5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700">
+                              <Eye className="h-3 w-3 mr-1" />
+                              Aktif
+                            </Badge>
                           </TableCell>
                           <TableCell className="py-2 h-12 text-center">
                             <div className="flex items-center justify-center gap-1">
@@ -358,19 +338,6 @@ export default function DesiPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className={`h-7 w-7 ${
-                                  pricing.isActive
-                                    ? "text-green-600 hover:text-green-700"
-                                    : "text-red-600 hover:text-red-700"
-                                }`}
-                                onClick={() => handleTogglePricing(pricing.id)}
-                                title={pricing.isActive ? "Pasif Yap" : "Aktif Yap"}
-                              >
-                                {pricing.isActive ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
                                 className="h-7 w-7 text-red-600 hover:text-red-700 dark:text-red-400"
                                 title="Sil"
                                 onClick={() => setDeletePricingModal({ open: true, pricingId: pricing.id })}
@@ -380,8 +347,7 @@ export default function DesiPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      )
-                    })}
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -688,33 +654,23 @@ export default function DesiPage() {
                   </h3>
 
                   <div className="space-y-2">
-                    <Label htmlFor="edit-desi" className="text-xs">Desi</Label>
+                    <Label htmlFor="edit-desi" className="text-xs">Desi Adı</Label>
                     <Input
                       id="edit-desi"
-                      type="number"
-                      defaultValue={editPricingModal.pricing.minDesi}
+                      defaultValue={editPricingModal.pricing.name}
                       className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
-                      placeholder="Desi değerini girin"
+                      placeholder="Desi adını girin"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="edit-fixed-price" className="text-xs">Sabit Fiyat (₺)</Label>
+                    <Label htmlFor="edit-fixed-price" className="text-xs">Fiyat (₺)</Label>
                     <Input
                       id="edit-fixed-price"
                       type="number"
-                      defaultValue={editPricingModal.pricing.fixedPrice}
+                      defaultValue={editPricingModal.pricing.price}
                       className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
-                      placeholder="Sabit fiyat girin"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700 mt-4">
-                    <Label htmlFor="edit-active" className="text-xs font-medium">Durum</Label>
-                    <Switch
-                      id="edit-active"
-                      defaultChecked={editPricingModal.pricing.isActive}
-                      className="scale-125 data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-purple-500 data-[state=checked]:via-violet-500 data-[state=checked]:to-indigo-500"
+                      placeholder="Fiyat girin"
                     />
                   </div>
                 </div>
@@ -889,9 +845,9 @@ export default function DesiPage() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => {
+                onClick={async () => {
                   if (deletePricingModal.pricingId) {
-                    setDesiPricings(desiPricings.filter(p => p.id !== deletePricingModal.pricingId))
+                    await handleDeleteDesi(deletePricingModal.pricingId)
                     setDeletePricingModal({ open: false, pricingId: null })
                   }
                 }}

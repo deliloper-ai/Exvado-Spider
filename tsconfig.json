@@ -23,5 +23,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "worker/**/*", "components/media/editor/ImageCanvas 2.tsx", "components/media/editor/ImageEditorModal 2.tsx"]
 }

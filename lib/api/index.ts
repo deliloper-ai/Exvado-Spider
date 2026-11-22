@@ -20,6 +20,19 @@ export { currencyService } from './currency.service';
 export type { Currency } from './currency.service';
 export { sliderService } from './slider.service';
 export { sliderSettingsService } from './slider-settings.service';
+export { specificationService } from './specification.service';
+export { supplierLogService } from './supplier-log.service';
+export { desiService } from './desi.service';
+export { priceTierService } from './price-tier.service';
+export { aiService } from './ai.service';
+export { supplierProductService } from './supplier-product.service';
+export { syncApiService } from './sync.service';
+export type { SyncStatusResponse, SyncProgress, SyncTriggerMode } from './sync.service';
+export { workerLogsService } from './worker-logs.service';
+export type { WorkerLogFile, WorkerLogContent } from './worker-logs.service';
+export { tokenRefreshService } from './token-refresh.service';
+export { xmlService } from './xml.service';
+export type { XmlLog, XmlLogsResponse } from './xml.service';
 
 // API Modules
 export * as productsApi from './products';

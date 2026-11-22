@@ -1,23 +1,55 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, EyeOff, Mail, Lock, ArrowRight } from "lucide-react"
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2 } from "lucide-react"
+import { authAPI, tokenManager, userManager } from "@/lib/auth"
+import { useToast } from "@/hooks/use-toast"
 
 export default function LoginPage() {
+  const router = useRouter()
+  const { toast } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [rememberMe, setRememberMe] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Sadece tasarım - backend yok
-    console.log("Login:", { email, password, rememberMe })
+    setError("")
+    setIsLoading(true)
+
+    try {
+      const response = await authAPI.login(email, password)
+
+      if (response.success && response.token) {
+        tokenManager.setToken(response.token)
+        userManager.setUser(response.user)
+
+        toast({
+          title: "Giriş Başarılı",
+          description: "Yönetim paneline yönlendiriliyorsunuz...",
+        })
+
+        router.push("/")
+      }
+    } catch (err: any) {
+      const errorMessage = err?.message || "Giriş yapılırken bir hata oluştu"
+      setError(errorMessage)
+      toast({
+        title: "Giriş Hatası",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -124,6 +156,13 @@ export default function LoginPage() {
               </p>
             </div>
 
+            {/* Error message */}
+            {error && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email */}
               <div className="space-y-1">
@@ -140,6 +179,7 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 h-11 text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -159,6 +199,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 h-11 text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg"
                     required
+                    disabled={isLoading}
                   />
                   <button
                     type="button"
@@ -170,8 +211,8 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Remember & Forgot */}
-              <div className="flex items-center justify-between pt-1">
+              {/* Remember */}
+              <div className="flex items-center pt-1">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="remember"
@@ -182,34 +223,28 @@ export default function LoginPage() {
                     Beni hatırla
                   </Label>
                 </div>
-                <Link
-                  href="#"
-                  className="text-xs text-indigo-600 hover:text-indigo-500 font-medium"
-                >
-                  Şifremi unuttum?
-                </Link>
               </div>
 
               {/* Submit Button */}
               <Button
                 type="submit"
+                disabled={isLoading}
                 className="w-full h-11 mt-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-medium rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-200"
               >
                 <div className="flex items-center justify-center">
-                  <span className="mr-2">Giriş Yap</span>
-                  <ArrowRight className="h-4 w-4" />
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <span>Giriş yapılıyor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="mr-2">Giriş Yap</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
                 </div>
               </Button>
-
-              {/* Back to Dashboard */}
-              <div className="text-center mt-4">
-                <Link
-                  href="/"
-                  className="text-xs text-gray-600 hover:text-indigo-600 font-medium"
-                >
-                  ← Dashboard'a Dön
-                </Link>
-              </div>
             </form>
           </div>
         </div>

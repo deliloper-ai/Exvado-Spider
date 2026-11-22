@@ -1,7 +1,9 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
+import { supplierLogService } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -56,162 +58,24 @@ import {
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 
-// Log tipi
+// Log tipi — API yanıtıyla uyumlu
 type SupplierLog = {
   id: string
   supplierName: string
   action: string
   status: "success" | "error" | "warning" | "pending"
-  logFileName: string // Log dosya adı
-  duration: number // milliseconds
+  logFileName: string
+  duration: number
   recordsAffected: number
   details: string
   errorMessage?: string
   user: string
 }
 
-// Örnek loglar
-const SUPPLIER_LOGS: SupplierLog[] = [
-  {
-    id: "1",
-    supplierName: "Ital",
-    action: "Fiyat Güncelleme",
-    status: "success",
-    logFileName: "2026-02-27_14-23",
-    duration: 1240,
-    recordsAffected: 156,
-    details: "Ürün fiyatları başarıyla güncellendi",
-    user: "Admin",
-  },
-  {
-    id: "2",
-    supplierName: "GoogleSheets",
-    action: "Stok Senkronizasyonu",
-    status: "success",
-    logFileName: "2026-02-27_14-15",
-    duration: 2340,
-    recordsAffected: 423,
-    details: "Stok bilgileri Google Sheets'ten çekildi",
-    user: "System",
-  },
-  {
-    id: "3",
-    supplierName: "Pars",
-    action: "Ürün İçe Aktarma",
-    status: "error",
-    logFileName: "2026-02-27_13-45",
-    duration: 890,
-    recordsAffected: 0,
-    details: "API bağlantı hatası",
-    errorMessage: "Connection timeout: Unable to reach Pars API endpoint",
-    user: "System",
-  },
-  {
-    id: "4",
-    supplierName: "Mapas",
-    action: "Kategori Eşleştirme",
-    status: "warning",
-    logFileName: "2026-02-27_13-30",
-    duration: 1560,
-    recordsAffected: 89,
-    details: "Bazı kategoriler eşleştirilemedi",
-    errorMessage: "12 kategori manuel eşleştirme gerektiriyor",
-    user: "Admin",
-  },
-  {
-    id: "5",
-    supplierName: "Catpower",
-    action: "Fiyat Güncelleme",
-    status: "success",
-    logFileName: "2026-02-27_12-50",
-    duration: 980,
-    recordsAffected: 234,
-    details: "Toplu fiyat güncellemesi tamamlandı",
-    user: "System",
-  },
-  {
-    id: "6",
-    supplierName: "Akinziraat",
-    action: "Stok Senkronizasyonu",
-    status: "pending",
-    logFileName: "2026-02-27_12-40",
-    duration: 0,
-    recordsAffected: 0,
-    details: "İşlem devam ediyor...",
-    user: "System",
-  },
-  {
-    id: "7",
-    supplierName: "Dovizsheet",
-    action: "Döviz Kuru Güncelleme",
-    status: "success",
-    logFileName: "2026-02-27_12-00",
-    duration: 450,
-    recordsAffected: 1,
-    details: "Günlük döviz kurları güncellendi",
-    user: "Scheduler",
-  },
-  {
-    id: "8",
-    supplierName: "Civaner",
-    action: "Ürün İçe Aktarma",
-    status: "success",
-    logFileName: "2026-02-27_11-30",
-    duration: 3200,
-    recordsAffected: 678,
-    details: "Yeni ürünler başarıyla eklendi",
-    user: "Admin",
-  },
-  {
-    id: "9",
-    supplierName: "AbmHirdavat",
-    action: "Fiyat Güncelleme",
-    status: "error",
-    logFileName: "2026-02-27_11-15",
-    duration: 1100,
-    recordsAffected: 0,
-    details: "Geçersiz veri formatı",
-    errorMessage: "JSON parse error: Invalid price format in row 45",
-    user: "System",
-  },
-  {
-    id: "10",
-    supplierName: "Gedizstoksheet",
-    action: "Stok Senkronizasyonu",
-    status: "success",
-    logFileName: "2026-02-27_10-45",
-    duration: 1890,
-    recordsAffected: 345,
-    details: "Stok miktarları güncellendi",
-    user: "System",
-  },
-  {
-    id: "11",
-    supplierName: "Ital",
-    action: "Görsel Güncelleme",
-    status: "warning",
-    logFileName: "2026-02-27_10-20",
-    duration: 4560,
-    recordsAffected: 201,
-    details: "Bazı görseller indirilemedi",
-    errorMessage: "15 ürün görseli 404 hatası verdi",
-    user: "System",
-  },
-  {
-    id: "12",
-    supplierName: "GoogleSheets",
-    action: "Kategori Eşleştirme",
-    status: "success",
-    logFileName: "2026-02-27_09-50",
-    duration: 780,
-    recordsAffected: 67,
-    details: "Kategori eşleştirmeleri tamamlandı",
-    user: "Admin",
-  },
-]
-
 export default function SupplierLogsPage() {
-  const [logs, setLogs] = useState<SupplierLog[]>(SUPPLIER_LOGS)
+  const { toast } = useToast()
+  const [logs, setLogs] = useState<SupplierLog[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [supplierFilter, setSupplierFilter] = useState<string>("all")
@@ -219,6 +83,36 @@ export default function SupplierLogsPage() {
   const [selectedLogFile, setSelectedLogFile] = useState<string>("")
   const [copied, setCopied] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+
+  const fetchLogs = useCallback(async () => {
+    try {
+      setLoading(true)
+      const response = await supplierLogService.getAll()
+      if (response.success && response.data) {
+        const mapped: SupplierLog[] = response.data.map((item: any) => ({
+          id: item.id,
+          supplierName: item.supplierName || '',
+          action: 'Cron İşlemi',
+          status: item.status,
+          logFileName: item.createdAt ? new Date(item.createdAt).toISOString().slice(0, 16).replace('T', '_').replace(':', '-') : '',
+          duration: item.responseTime ? item.responseTime * 1000 : 0,
+          recordsAffected: (item.createdCount || 0) + (item.updatedCount || 0),
+          details: item.error || `${item.totalCount || 0} ürün işlendi`,
+          errorMessage: item.error || undefined,
+          user: 'System',
+        }))
+        setLogs(mapped)
+      }
+    } catch {
+      toast({ title: "Hata", description: "Loglar yüklenemedi", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    fetchLogs()
+  }, [fetchLogs])
 
   // Filtrelenmiş loglar
   const filteredLogs = logs.filter(log => {

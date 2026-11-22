@@ -1,7 +1,10 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
+import { categoryService, priceTierService, aiService } from "@/lib/api"
+import type { CommissionData, CommissionTier, MarketplaceRates, PriceTier } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -74,380 +77,135 @@ type Category = {
   children?: Category[]
 }
 
-// Örnek kategori verileri
-const SAMPLE_CATEGORIES: Category[] = [
-  {
-    id: "1",
-    name: "Hayvancılık",
-    slug: "hayvancilik",
-    level: 1,
-    parentId: null,
-    isActive: true,
-    productCount: 145,
-    order: 1,
-    children: [
-      {
-        id: "1-1",
-        name: "Kümes Hayvanları",
-        slug: "kumes-hayvanlari",
-        level: 2,
-        parentId: "1",
-        isActive: true,
-        productCount: 48,
-        order: 1,
-        children: [
-          {
-            id: "1-1-1",
-            name: "Tavuk Ekipmanları",
-            slug: "tavuk-ekipmanlari",
-            level: 3,
-            parentId: "1-1",
-            isActive: true,
-            productCount: 25,
-            order: 1,
-          },
-          {
-            id: "1-1-2",
-            name: "Yumurta Koleksiyonu",
-            slug: "yumurta-koleksiyonu",
-            level: 3,
-            parentId: "1-1",
-            isActive: true,
-            productCount: 12,
-            order: 2,
-          },
-          {
-            id: "1-1-3",
-            name: "Sulama Sistemleri",
-            slug: "sulama-sistemleri",
-            level: 3,
-            parentId: "1-1",
-            isActive: true,
-            productCount: 11,
-            order: 3,
-          },
-        ]
-      },
-      {
-        id: "1-2",
-        name: "Büyükbaş Hayvanlar",
-        slug: "buyukbas-hayvanlar",
-        level: 2,
-        parentId: "1",
-        isActive: true,
-        productCount: 62,
-        order: 2,
-        children: [
-          {
-            id: "1-2-1",
-            name: "Sağım Makineleri",
-            slug: "sagim-makineleri",
-            level: 3,
-            parentId: "1-2",
-            isActive: true,
-            productCount: 18,
-            order: 1,
-          },
-          {
-            id: "1-2-2",
-            name: "Yem Karma Makineleri",
-            slug: "yem-karma-makineleri",
-            level: 3,
-            parentId: "1-2",
-            isActive: true,
-            productCount: 22,
-            order: 2,
-          },
-          {
-            id: "1-2-3",
-            name: "Sıvı Gübre Tankları",
-            slug: "sivi-gubre-tanklari",
-            level: 3,
-            parentId: "1-2",
-            isActive: true,
-            productCount: 22,
-            order: 3,
-          },
-        ]
-      },
-      {
-        id: "1-3",
-        name: "Küçükbaş Hayvanlar",
-        slug: "kucukbas-hayvanlar",
-        level: 2,
-        parentId: "1",
-        isActive: true,
-        productCount: 35,
-        order: 3,
-        children: [
-          {
-            id: "1-3-1",
-            name: "Koyun Kırkma Makineleri",
-            slug: "koyun-kirkma-makineleri",
-            level: 3,
-            parentId: "1-3",
-            isActive: true,
-            productCount: 15,
-            order: 1,
-          },
-          {
-            id: "1-3-2",
-            name: "Çoban Köpeği Ekipmanları",
-            slug: "coban-kopegi-ekipmanlari",
-            level: 3,
-            parentId: "1-3",
-            isActive: false,
-            productCount: 8,
-            order: 2,
-          },
-          {
-            id: "1-3-3",
-            name: "Ağıl Sistemleri",
-            slug: "agil-sistemleri",
-            level: 3,
-            parentId: "1-3",
-            isActive: true,
-            productCount: 12,
-            order: 3,
-          },
-        ]
-      },
-    ]
-  },
-  {
-    id: "2",
-    name: "Bahçe Ekipmanları",
-    slug: "bahce-ekipmanlari",
-    level: 1,
-    parentId: null,
-    isActive: true,
-    productCount: 238,
-    order: 2,
-    children: [
-      {
-        id: "2-1",
-        name: "Çim Biçme Makineleri",
-        slug: "cim-bicme-makineleri",
-        level: 2,
-        parentId: "2",
-        isActive: true,
-        productCount: 85,
-        order: 1,
-        children: [
-          {
-            id: "2-1-1",
-            name: "Elektrikli Çim Biçme",
-            slug: "elektrikli-cim-bicme",
-            level: 3,
-            parentId: "2-1",
-            isActive: true,
-            productCount: 32,
-            order: 1,
-          },
-          {
-            id: "2-1-2",
-            name: "Benzinli Çim Biçme",
-            slug: "benzinli-cim-bicme",
-            level: 3,
-            parentId: "2-1",
-            isActive: true,
-            productCount: 38,
-            order: 2,
-          },
-          {
-            id: "2-1-3",
-            name: "Robotik Çim Biçme",
-            slug: "robotik-cim-bicme",
-            level: 3,
-            parentId: "2-1",
-            isActive: true,
-            productCount: 15,
-            order: 3,
-          },
-        ]
-      },
-      {
-        id: "2-2",
-        name: "Sulama Sistemleri",
-        slug: "bahce-sulama-sistemleri",
-        level: 2,
-        parentId: "2",
-        isActive: true,
-        productCount: 96,
-        order: 2,
-        children: [
-          {
-            id: "2-2-1",
-            name: "Damla Sulama",
-            slug: "damla-sulama",
-            level: 3,
-            parentId: "2-2",
-            isActive: true,
-            productCount: 45,
-            order: 1,
-          },
-          {
-            id: "2-2-2",
-            name: "Yağmurlama Sulama",
-            slug: "yagmurlama-sulama",
-            level: 3,
-            parentId: "2-2",
-            isActive: true,
-            productCount: 35,
-            order: 2,
-          },
-          {
-            id: "2-2-3",
-            name: "Otomatik Sulama",
-            slug: "otomatik-sulama",
-            level: 3,
-            parentId: "2-2",
-            isActive: true,
-            productCount: 16,
-            order: 3,
-          },
-        ]
-      },
-      {
-        id: "2-3",
-        name: "Bahçe El Aletleri",
-        slug: "bahce-el-aletleri",
-        level: 2,
-        parentId: "2",
-        isActive: true,
-        productCount: 57,
-        order: 3,
-      },
-    ]
-  },
-  {
-    id: "3",
-    name: "Tarım Makineleri",
-    slug: "tarim-makineleri",
-    level: 1,
-    parentId: null,
-    isActive: true,
-    productCount: 312,
-    order: 3,
-    children: [
-      {
-        id: "3-1",
-        name: "Traktör Ekipmanları",
-        slug: "traktor-ekipmanlari",
-        level: 2,
-        parentId: "3",
-        isActive: true,
-        productCount: 128,
-        order: 1,
-        children: [
-          {
-            id: "3-1-1",
-            name: "Pulluk Sistemleri",
-            slug: "pulluk-sistemleri",
-            level: 3,
-            parentId: "3-1",
-            isActive: true,
-            productCount: 45,
-            order: 1,
-          },
-          {
-            id: "3-1-2",
-            name: "Diskaro Makineleri",
-            slug: "diskaro-makineleri",
-            level: 3,
-            parentId: "3-1",
-            isActive: true,
-            productCount: 38,
-            order: 2,
-          },
-          {
-            id: "3-1-3",
-            name: "Römork ve Treylırlar",
-            slug: "romork-treylirlar",
-            level: 3,
-            parentId: "3-1",
-            isActive: true,
-            productCount: 45,
-            order: 3,
-          },
-        ]
-      },
-      {
-        id: "3-2",
-        name: "Hasat Makineleri",
-        slug: "hasat-makineleri",
-        level: 2,
-        parentId: "3",
-        isActive: true,
-        productCount: 94,
-        order: 2,
-      },
-      {
-        id: "3-3",
-        name: "Ekim Makineleri",
-        slug: "ekim-makineleri",
-        level: 2,
-        parentId: "3",
-        isActive: true,
-        productCount: 90,
-        order: 3,
-      },
-    ]
-  },
-  {
-    id: "4",
-    name: "Sera Ekipmanları",
-    slug: "sera-ekipmanlari",
-    level: 1,
-    parentId: null,
-    isActive: true,
-    productCount: 156,
-    order: 4,
-    children: [
-      {
-        id: "4-1",
-        name: "Isıtma Sistemleri",
-        slug: "isitma-sistemleri",
-        level: 2,
-        parentId: "4",
-        isActive: true,
-        productCount: 42,
-        order: 1,
-      },
-      {
-        id: "4-2",
-        name: "Havalandırma",
-        slug: "havalandirma",
-        level: 2,
-        parentId: "4",
-        isActive: true,
-        productCount: 38,
-        order: 2,
-      },
-      {
-        id: "4-3",
-        name: "Sera Örtü Malzemeleri",
-        slug: "sera-ortu-malzemeleri",
-        level: 2,
-        parentId: "4",
-        isActive: false,
-        productCount: 76,
-        order: 3,
-      },
-    ]
-  },
-]
+// API'den yüklenecek
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>(SAMPLE_CATEGORIES)
+  const { toast } = useToast()
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [editModal, setEditModal] = useState<{ open: boolean; category: Category | null }>({ open: false, category: null })
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; categoryId: string | null }>({ open: false, categoryId: null })
   const [addModal, setAddModal] = useState<{ open: boolean; parentId: string | null }>({ open: false, parentId: null })
-  const [commissionModal, setCommissionModal] = useState(false)
+  const [commissionModal, setCommissionModal] = useState<{
+    open: boolean
+    categoryId: string | null
+  }>({ open: false, categoryId: null })
+  const [commissionData, setCommissionData] = useState<CommissionData | null>(null)
+  const [commissionTiers, setCommissionTiers] = useState<{ tierId: string; rate: number }[]>([])
+  const [commissionMarketplace, setCommissionMarketplace] = useState<MarketplaceRates>({ n11: 0, trendyol: 0, hepsiburada: 0, pazarama: 0, sopyo: 0 })
+  const [commissionLoading, setCommissionLoading] = useState(false)
+  const [commissionSaving, setCommissionSaving] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [addForm, setAddForm] = useState({ name: '', parentId: 'none', isActive: true, metaTitle: '', metaDescription: '' })
+  const [editForm, setEditForm] = useState({ name: '', parentId: 'none', isActive: true, metaTitle: '', metaDescription: '' })
+  const [saving, setSaving] = useState(false)
+  const [aiGenerating, setAiGenerating] = useState<string | null>(null)
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      setLoading(true)
+      const response = await categoryService.getTree()
+      if (response.success && response.data) {
+        const mapTree = (items: any[], level = 1): Category[] =>
+          items.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            slug: item.slug || '',
+            level,
+            parentId: item.parentId || null,
+            isActive: item.isActive ?? true,
+            productCount: 0,
+            order: item.order ?? 0,
+            metaTitle: item.metaTitle,
+            metaDescription: item.metaDescription,
+            children: item.children?.length ? mapTree(item.children, level + 1) : undefined,
+          }))
+        setCategories(mapTree(response.data))
+      }
+    } catch {
+      toast({ title: "Hata", description: "Kategoriler yüklenemedi", variant: "destructive" })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    fetchCategories()
+  }, [fetchCategories])
+
+  // Edit modal açıldığında editForm'u doldur
+  useEffect(() => {
+    if (editModal.open && editModal.category) {
+      setEditForm({
+        name: editModal.category.name,
+        parentId: editModal.category.parentId || 'none',
+        isActive: editModal.category.isActive,
+        metaTitle: editModal.category.metaTitle || '',
+        metaDescription: editModal.category.metaDescription || '',
+      })
+    }
+  }, [editModal.open, editModal.category])
+
   const [itemsPerPage, setItemsPerPage] = useState(10)
+
+  // Komisyon modal açma handler
+  const openCommissionModal = useCallback(async (categoryId: string | null) => {
+    setCommissionModal({ open: true, categoryId })
+    setCommissionLoading(true)
+    setCommissionData(null)
+
+    try {
+      if (categoryId) {
+        // Tekil kategori — komisyon oranlarını getir
+        const response = await categoryService.getCommissions(categoryId)
+        if (response.success && response.data) {
+          setCommissionData(response.data)
+          setCommissionTiers(response.data.tiers.map((t) => ({ tierId: t.tierId, rate: t.rate })))
+          setCommissionMarketplace(response.data.marketplaceRates)
+        }
+      } else {
+        // Toplu güncelleme — sadece kademe aralıklarını getir
+        const response = await priceTierService.getAll()
+        if (response.success && response.data) {
+          setCommissionData({
+            categoryId: '',
+            categoryName: 'Toplu Güncelleme',
+            marketplaceRates: { n11: 0, trendyol: 0, hepsiburada: 0, pazarama: 0, sopyo: 0 },
+            tiers: response.data.map((t) => ({ tierId: t.id, minPrice: t.minPrice, maxPrice: t.maxPrice, rate: 0 })),
+          })
+          setCommissionTiers(response.data.map((t) => ({ tierId: t.id, rate: 0 })))
+          setCommissionMarketplace({ n11: 0, trendyol: 0, hepsiburada: 0, pazarama: 0, sopyo: 0 })
+        }
+      }
+    } catch {
+      toast({ title: "Hata", description: "Komisyon oranları yüklenemedi", variant: "destructive" })
+    } finally {
+      setCommissionLoading(false)
+    }
+  }, [toast])
+
+  // Komisyon kaydetme handler
+  const saveCommissions = useCallback(async () => {
+    setCommissionSaving(true)
+    try {
+      const payload = { marketplaceRates: commissionMarketplace, tiers: commissionTiers }
+
+      if (commissionModal.categoryId) {
+        await categoryService.updateCommissions(commissionModal.categoryId, payload)
+        toast({ title: "Başarılı", description: "Komisyon oranları güncellendi" })
+      } else {
+        await categoryService.bulkUpdateCommissions({ ...payload, categoryIds: [] })
+        toast({ title: "Başarılı", description: "Tüm kategorilerin komisyon oranları güncellendi" })
+      }
+      setCommissionModal({ open: false, categoryId: null })
+    } catch {
+      toast({ title: "Hata", description: "Komisyon oranları kaydedilemedi", variant: "destructive" })
+    } finally {
+      setCommissionSaving(false)
+    }
+  }, [commissionModal.categoryId, commissionTiers, commissionMarketplace, toast])
 
   // Kategoriyi genişlet/daralt
   const toggleExpand = (categoryId: string) => {
@@ -483,12 +241,28 @@ export default function CategoriesPage() {
       )
     : null
 
-  // Kategoriyi aktif/pasif yap
-  const handleToggleActive = (categoryId: string) => {
+  // Kategoriyi aktif/pasif yap (optimistic update + API persist)
+  const handleToggleActive = async (categoryId: string) => {
+    const findCategory = (cats: Category[]): Category | undefined => {
+      for (const cat of cats) {
+        if (cat.id === categoryId) return cat
+        if (cat.children) {
+          const found = findCategory(cat.children)
+          if (found) return found
+        }
+      }
+      return undefined
+    }
+    const target = findCategory(categories)
+    if (!target) return
+
+    const newStatus = !target.isActive
+
+    // Optimistic update
     const updateCategoryStatus = (cats: Category[]): Category[] => {
       return cats.map(cat => {
         if (cat.id === categoryId) {
-          return { ...cat, isActive: !cat.isActive }
+          return { ...cat, isActive: newStatus }
         }
         if (cat.children) {
           return { ...cat, children: updateCategoryStatus(cat.children) }
@@ -497,6 +271,87 @@ export default function CategoriesPage() {
       })
     }
     setCategories(updateCategoryStatus(categories))
+
+    try {
+      await categoryService.update(categoryId, { isActive: newStatus })
+      toast({ title: "Başarılı", description: `Kategori ${newStatus ? 'aktif' : 'pasif'} yapıldı` })
+    } catch {
+      // Rollback
+      setCategories(updateCategoryStatus(updateCategoryStatus(categories)))
+      toast({ title: "Hata", description: "Durum güncellenemedi", variant: "destructive" })
+    }
+  }
+
+  // Yeni kategori ekle
+  const handleAddCategory = async () => {
+    if (!addForm.name.trim()) {
+      toast({ title: "Hata", description: "Kategori adı zorunludur", variant: "destructive" })
+      return
+    }
+    setSaving(true)
+    try {
+      const payload: any = {
+        name: addForm.name.trim(),
+        isActive: addForm.isActive,
+      }
+      if (addForm.parentId !== 'none') payload.parentId = addForm.parentId
+      if (addForm.metaTitle.trim()) payload.metaTitle = addForm.metaTitle.trim()
+      if (addForm.metaDescription.trim()) payload.metaDescription = addForm.metaDescription.trim()
+
+      await categoryService.create(payload)
+      toast({ title: "Başarılı", description: "Kategori oluşturuldu" })
+      setAddModal({ open: false, parentId: null })
+      setAddForm({ name: '', parentId: 'none', isActive: true, metaTitle: '', metaDescription: '' })
+      fetchCategories()
+    } catch {
+      toast({ title: "Hata", description: "Kategori oluşturulamadı", variant: "destructive" })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Kategori düzenle
+  const handleEditCategory = async () => {
+    if (!editModal.category) return
+    if (!editForm.name.trim()) {
+      toast({ title: "Hata", description: "Kategori adı zorunludur", variant: "destructive" })
+      return
+    }
+    setSaving(true)
+    try {
+      const payload: any = {
+        name: editForm.name.trim(),
+        isActive: editForm.isActive,
+        parentId: editForm.parentId === 'none' ? null : editForm.parentId,
+        metaTitle: editForm.metaTitle.trim() || null,
+        metaDescription: editForm.metaDescription.trim() || null,
+      }
+
+      await categoryService.update(editModal.category.id, payload)
+      toast({ title: "Başarılı", description: "Kategori güncellendi" })
+      setEditModal({ open: false, category: null })
+      fetchCategories()
+    } catch {
+      toast({ title: "Hata", description: "Kategori güncellenemedi", variant: "destructive" })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Kategori sil
+  const handleDeleteCategory = async () => {
+    if (!deleteModal.categoryId) return
+    setSaving(true)
+    try {
+      await categoryService.delete(deleteModal.categoryId)
+      toast({ title: "Başarılı", description: "Kategori silindi" })
+      setDeleteModal({ open: false, categoryId: null })
+      fetchCategories()
+    } catch {
+      toast({ title: "Hata", description: "Kategori silinemedi", variant: "destructive" })
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Kategori satırını render et
@@ -583,7 +438,7 @@ export default function CategoriesPage() {
                 size="icon"
                 className="h-7 w-7 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
                 title="Komisyon Oranları"
-                onClick={() => setCommissionModal(true)}
+                onClick={() => openCommissionModal(category.id)}
               >
                 <CircleDollarSign className="h-3.5 w-3.5" />
               </Button>
@@ -688,7 +543,7 @@ export default function CategoriesPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => setCommissionModal(true)}
+              onClick={() => openCommissionModal(null)}
               className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:via-teal-700 hover:to-cyan-700 text-white shadow-md hover:shadow-lg transition-shadow"
               size="sm"
             >
@@ -815,7 +670,12 @@ export default function CategoriesPage() {
         </Card>
 
         {/* Add Category Sheet */}
-        <Sheet open={addModal.open} onOpenChange={(open) => setAddModal({ open, parentId: null })}>
+        <Sheet open={addModal.open} onOpenChange={(open) => {
+          if (!open) {
+            setAddModal({ open: false, parentId: null })
+            setAddForm({ name: '', parentId: 'none', isActive: true, metaTitle: '', metaDescription: '' })
+          }
+        }}>
           <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
             <SheetHeader className="sr-only">
               <SheetTitle>Yeni Kategori Ekle</SheetTitle>
@@ -831,6 +691,8 @@ export default function CategoriesPage() {
                   <Label htmlFor="add-name" className="text-xs">Kategori Adı</Label>
                   <Input
                     id="add-name"
+                    value={addForm.name}
+                    onChange={(e) => setAddForm(prev => ({ ...prev, name: e.target.value }))}
                     className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                     placeholder="Kategori adını girin"
                   />
@@ -838,7 +700,7 @@ export default function CategoriesPage() {
 
                 <div className="space-y-3">
                   <Label htmlFor="add-parent" className="text-xs">Üst Kategori</Label>
-                  <Select defaultValue={addModal.parentId || "none"}>
+                  <Select value={addForm.parentId} onValueChange={(value) => setAddForm(prev => ({ ...prev, parentId: value }))}>
                     <SelectTrigger className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600">
                       <SelectValue placeholder="Üst kategori seçin" />
                     </SelectTrigger>
@@ -859,7 +721,8 @@ export default function CategoriesPage() {
                   <Label htmlFor="add-active" className="text-xs font-medium">Kategori Durumu</Label>
                   <Switch
                     id="add-active"
-                    defaultChecked={true}
+                    checked={addForm.isActive}
+                    onCheckedChange={(checked) => setAddForm(prev => ({ ...prev, isActive: checked }))}
                     className="scale-125 data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-purple-500 data-[state=checked]:via-violet-500 data-[state=checked]:to-indigo-500"
                   />
                 </div>
@@ -878,14 +741,33 @@ export default function CategoriesPage() {
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                      disabled={aiGenerating === 'add-meta'}
+                      onClick={async () => {
+                        if (!addForm.name.trim()) {
+                          toast({ title: "Uyarı", description: "Önce kategori adını girin", variant: "destructive" })
+                          return
+                        }
+                        setAiGenerating('add-meta')
+                        try {
+                          const result = await aiService.generateCategoryMeta(addForm.name)
+                          setAddForm(prev => ({ ...prev, metaTitle: result.title, metaDescription: result.description }))
+                          toast({ title: "Başarılı", description: "Meta bilgileri AI ile oluşturuldu" })
+                        } catch (err: any) {
+                          toast({ title: "Hata", description: err.message || "AI ile oluşturulamadı", variant: "destructive" })
+                        } finally {
+                          setAiGenerating(null)
+                        }
+                      }}
+                      className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 disabled:opacity-50"
                     >
                       <Sparkles className="h-3 w-3 mr-1" />
-                      AI ile Oluştur
+                      {aiGenerating === 'add-meta' ? 'Oluşturuluyor...' : 'AI ile Oluştur'}
                     </Button>
                   </div>
                   <Input
                     id="add-meta-title"
+                    value={addForm.metaTitle}
+                    onChange={(e) => setAddForm(prev => ({ ...prev, metaTitle: e.target.value }))}
                     className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                     placeholder="SEO için meta başlık girin"
                     maxLength={60}
@@ -902,14 +784,33 @@ export default function CategoriesPage() {
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                      disabled={aiGenerating === 'add-meta'}
+                      onClick={async () => {
+                        if (!addForm.name.trim()) {
+                          toast({ title: "Uyarı", description: "Önce kategori adını girin", variant: "destructive" })
+                          return
+                        }
+                        setAiGenerating('add-meta')
+                        try {
+                          const result = await aiService.generateCategoryMeta(addForm.name)
+                          setAddForm(prev => ({ ...prev, metaTitle: result.title, metaDescription: result.description }))
+                          toast({ title: "Başarılı", description: "Meta bilgileri AI ile oluşturuldu" })
+                        } catch (err: any) {
+                          toast({ title: "Hata", description: err.message || "AI ile oluşturulamadı", variant: "destructive" })
+                        } finally {
+                          setAiGenerating(null)
+                        }
+                      }}
+                      className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 disabled:opacity-50"
                     >
                       <Sparkles className="h-3 w-3 mr-1" />
-                      AI ile Oluştur
+                      {aiGenerating === 'add-meta' ? 'Oluşturuluyor...' : 'AI ile Oluştur'}
                     </Button>
                   </div>
                   <Textarea
                     id="add-meta-desc"
+                    value={addForm.metaDescription}
+                    onChange={(e) => setAddForm(prev => ({ ...prev, metaDescription: e.target.value }))}
                     className="text-xs min-h-[80px] resize-none bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                     placeholder="SEO için meta açıklama girin"
                     maxLength={160}
@@ -924,16 +825,22 @@ export default function CategoriesPage() {
               <div className="flex items-center gap-3 pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
                 <Button
                   variant="outline"
-                  onClick={() => setAddModal({ open: false, parentId: null })}
+                  onClick={() => {
+                    setAddModal({ open: false, parentId: null })
+                    setAddForm({ name: '', parentId: 'none', isActive: true, metaTitle: '', metaDescription: '' })
+                  }}
                   className="flex-1 h-10"
+                  disabled={saving}
                 >
                   İptal
                 </Button>
                 <Button
+                  onClick={handleAddCategory}
+                  disabled={saving}
                   className="flex-1 h-10 bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 hover:from-green-700 hover:via-emerald-700 hover:to-teal-700 shadow-md hover:shadow-lg transition-shadow"
                 >
                   <Save className="h-4 w-4 mr-2" />
-                  Kaydet
+                  {saving ? "Kaydediliyor..." : "Kaydet"}
                 </Button>
               </div>
             </div>
@@ -941,7 +848,7 @@ export default function CategoriesPage() {
         </Sheet>
 
         {/* Edit Category Sheet */}
-        <Sheet open={editModal.open} onOpenChange={(open) => setEditModal({ open, category: null })}>
+        <Sheet open={editModal.open} onOpenChange={(open) => { if (!open) setEditModal({ open: false, category: null }) }}>
           <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
             <SheetHeader className="sr-only">
               <SheetTitle>Kategori Düzenle</SheetTitle>
@@ -958,7 +865,8 @@ export default function CategoriesPage() {
                     <Label htmlFor="edit-name" className="text-xs">Kategori Adı</Label>
                     <Input
                       id="edit-name"
-                      defaultValue={editModal.category.name}
+                      value={editForm.name}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
                       className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                       placeholder="Kategori adını girin"
                     />
@@ -966,7 +874,7 @@ export default function CategoriesPage() {
 
                   <div className="space-y-3">
                     <Label htmlFor="edit-parent" className="text-xs">Üst Kategori</Label>
-                    <Select defaultValue={editModal.category.parentId || "none"}>
+                    <Select value={editForm.parentId} onValueChange={(value) => setEditForm(prev => ({ ...prev, parentId: value }))}>
                       <SelectTrigger className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600">
                         <SelectValue placeholder="Üst kategori seçin" />
                       </SelectTrigger>
@@ -987,7 +895,8 @@ export default function CategoriesPage() {
                     <Label htmlFor="edit-active" className="text-xs font-medium">Kategori Durumu</Label>
                     <Switch
                       id="edit-active"
-                      defaultChecked={editModal.category.isActive}
+                      checked={editForm.isActive}
+                      onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isActive: checked }))}
                       className="scale-125 data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-purple-500 data-[state=checked]:via-violet-500 data-[state=checked]:to-indigo-500"
                     />
                   </div>
@@ -1006,15 +915,33 @@ export default function CategoriesPage() {
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                        disabled={aiGenerating === 'edit-meta'}
+                        onClick={async () => {
+                          if (!editForm.name.trim()) {
+                            toast({ title: "Uyarı", description: "Kategori adı boş", variant: "destructive" })
+                            return
+                          }
+                          setAiGenerating('edit-meta')
+                          try {
+                            const result = await aiService.generateCategoryMeta(editForm.name)
+                            setEditForm(prev => ({ ...prev, metaTitle: result.title, metaDescription: result.description }))
+                            toast({ title: "Başarılı", description: "Meta bilgileri AI ile oluşturuldu" })
+                          } catch (err: any) {
+                            toast({ title: "Hata", description: err.message || "AI ile oluşturulamadı", variant: "destructive" })
+                          } finally {
+                            setAiGenerating(null)
+                          }
+                        }}
+                        className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 disabled:opacity-50"
                       >
                         <Sparkles className="h-3 w-3 mr-1" />
-                        AI ile Oluştur
+                        {aiGenerating === 'edit-meta' ? 'Oluşturuluyor...' : 'AI ile Oluştur'}
                       </Button>
                     </div>
                     <Input
                       id="edit-meta-title"
-                      defaultValue={editModal.category.metaTitle || ""}
+                      value={editForm.metaTitle}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, metaTitle: e.target.value }))}
                       className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                       placeholder="SEO için meta başlık girin"
                       maxLength={60}
@@ -1031,15 +958,33 @@ export default function CategoriesPage() {
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400"
+                        disabled={aiGenerating === 'edit-meta'}
+                        onClick={async () => {
+                          if (!editForm.name.trim()) {
+                            toast({ title: "Uyarı", description: "Kategori adı boş", variant: "destructive" })
+                            return
+                          }
+                          setAiGenerating('edit-meta')
+                          try {
+                            const result = await aiService.generateCategoryMeta(editForm.name)
+                            setEditForm(prev => ({ ...prev, metaTitle: result.title, metaDescription: result.description }))
+                            toast({ title: "Başarılı", description: "Meta bilgileri AI ile oluşturuldu" })
+                          } catch (err: any) {
+                            toast({ title: "Hata", description: err.message || "AI ile oluşturulamadı", variant: "destructive" })
+                          } finally {
+                            setAiGenerating(null)
+                          }
+                        }}
+                        className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 disabled:opacity-50"
                       >
                         <Sparkles className="h-3 w-3 mr-1" />
-                        AI ile Oluştur
+                        {aiGenerating === 'edit-meta' ? 'Oluşturuluyor...' : 'AI ile Oluştur'}
                       </Button>
                     </div>
                     <Textarea
                       id="edit-meta-desc"
-                      defaultValue={editModal.category.metaDescription || ""}
+                      value={editForm.metaDescription}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, metaDescription: e.target.value }))}
                       className="text-xs min-h-[80px] resize-none bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600"
                       placeholder="SEO için meta açıklama girin"
                       maxLength={160}
@@ -1056,14 +1001,17 @@ export default function CategoriesPage() {
                     variant="outline"
                     onClick={() => setEditModal({ open: false, category: null })}
                     className="flex-1 h-10"
+                    disabled={saving}
                   >
                     İptal
                   </Button>
                   <Button
+                    onClick={handleEditCategory}
+                    disabled={saving}
                     className="flex-1 h-10 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 shadow-md hover:shadow-lg transition-shadow"
                   >
                     <Save className="h-4 w-4 mr-2" />
-                    Güncelle
+                    {saving ? "Güncelleniyor..." : "Güncelle"}
                   </Button>
                 </div>
               </div>
@@ -1072,7 +1020,7 @@ export default function CategoriesPage() {
         </Sheet>
 
         {/* Commission Rates Sheet */}
-        <Sheet open={commissionModal} onOpenChange={setCommissionModal}>
+        <Sheet open={commissionModal.open} onOpenChange={(open) => { if (!open) setCommissionModal({ open: false, categoryId: null }) }}>
           <SheetContent className="w-full sm:max-w-3xl overflow-y-auto p-0">
             <SheetHeader className="sr-only">
               <SheetTitle>Komisyon Oranları</SheetTitle>
@@ -1085,7 +1033,9 @@ export default function CategoriesPage() {
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                      Komisyon Oranları Yönetimi
+                      {commissionData?.categoryName
+                        ? `${commissionData.categoryName} — Komisyon Oranları`
+                        : "Toplu Komisyon Güncelleme"}
                     </h3>
                     <p className="text-xs text-gray-600 dark:text-gray-400">
                       Maliyet aralıklarına göre brüt kâr oranlarını belirleyin
@@ -1094,111 +1044,136 @@ export default function CategoriesPage() {
                 </div>
               </div>
 
-              {/* Commission Rate Tiers */}
-              <div className="space-y-3">
-                {[
-                  { from: 0, to: 50, percent: 220 },
-                  { from: 50, to: 100, percent: 160 },
-                  { from: 100, to: 200, percent: 125 },
-                  { from: 200, to: 400, percent: 95 },
-                  { from: 400, to: 800, percent: 70 },
-                  { from: 800, to: 1500, percent: 55 },
-                  { from: 1500, to: 2500, percent: 50 },
-                  { from: 2500, to: 4000, percent: 46 },
-                  { from: 4000, to: 6000, percent: 42 },
-                  { from: 6000, to: 7500, percent: 38 },
-                  { from: 7500, to: 9000, percent: 37 },
-                  { from: 9000, to: 11000, percent: 36 },
-                  { from: 11000, to: 13000, percent: 35 },
-                  { from: 13000, to: 15000, percent: 34 },
-                  { from: 15000, to: 17000, percent: 33 },
-                  { from: 17000, to: 20000, percent: 32 },
-                  { from: 20000, to: 50000, percent: 31 },
-                  { from: 50000, to: 100000, percent: 27 },
-                  { from: 100000, to: 99999999, percent: 26 },
-                ].map((tier, index) => (
-                  <div
-                    key={index}
-                    className="grid grid-cols-12 gap-3 items-center p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors"
-                  >
-                    <div className="col-span-1">
-                      <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                          {index + 1}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="col-span-5">
-                      <Label className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5 block">
-                        Başlangıç Fiyatı
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          defaultValue={tier.from}
-                          className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 pr-8"
-                          placeholder="0"
-                        />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">
-                          ₺
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="col-span-5">
-                      <Label className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5 block">
-                        Bitiş Fiyatı
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          defaultValue={tier.to}
-                          className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 pr-8"
-                          placeholder="0"
-                        />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">
-                          ₺
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="col-span-1 flex justify-center">
-                      <div className="text-lg text-gray-400 dark:text-gray-600">→</div>
-                    </div>
-
-                    <div className="col-span-11">
-                      <Label className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5 block">
-                        Brüt Kâr Oranı
-                      </Label>
-                      <div className="relative">
-                        <Input
-                          type="number"
-                          defaultValue={tier.percent}
-                          className="text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 pr-8"
-                          placeholder="0"
-                        />
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                          %
-                        </span>
-                      </div>
+              {commissionLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-sm text-gray-500">Yükleniyor...</div>
+                </div>
+              ) : commissionData ? (
+                <>
+                  {/* Marketplace Oranları */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                      Marketplace Oranları
+                    </h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {([
+                        { key: "sopyo" as const, label: "Sopyo" },
+                        { key: "n11" as const, label: "N11" },
+                        { key: "trendyol" as const, label: "Trendyol" },
+                        { key: "hepsiburada" as const, label: "Hepsiburada" },
+                        { key: "pazarama" as const, label: "Pazarama" },
+                      ]).map((mp) => (
+                        <div key={mp.key} className="space-y-1">
+                          <Label className="text-[10px] text-gray-500 dark:text-gray-400">{mp.label}</Label>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              value={commissionMarketplace[mp.key]}
+                              onChange={(e) => setCommissionMarketplace((prev) => ({ ...prev, [mp.key]: parseInt(e.target.value) || 0 }))}
+                              className="text-xs bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 pr-8"
+                              placeholder="0"
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">%</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  {/* Commission Rate Tiers */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                      Brüt Kâr Oranları (Kademe)
+                    </h4>
+                    {commissionData.tiers.map((tier, index) => {
+                      const tierState = commissionTiers.find((t) => t.tierId === tier.tierId)
+                      return (
+                        <div
+                          key={tier.tierId}
+                          className="grid grid-cols-12 gap-3 items-center p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors"
+                        >
+                          <div className="col-span-1">
+                            <div className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                                {index + 1}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="col-span-4">
+                            <Label className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5 block">
+                              Başlangıç
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                value={tier.minPrice}
+                                readOnly
+                                className="text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 pr-8 cursor-not-allowed"
+                              />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">₺</span>
+                            </div>
+                          </div>
+
+                          <div className="col-span-4">
+                            <Label className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5 block">
+                              Bitiş
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                value={tier.maxPrice}
+                                readOnly
+                                className="text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 pr-8 cursor-not-allowed"
+                              />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-500 dark:text-gray-400">₺</span>
+                            </div>
+                          </div>
+
+                          <div className="col-span-3">
+                            <Label className="text-[10px] text-gray-500 dark:text-gray-400 mb-1.5 block">
+                              Brüt Kâr
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                value={tierState?.rate ?? 0}
+                                onChange={(e) => {
+                                  const newRate = parseInt(e.target.value) || 0
+                                  setCommissionTiers((prev) =>
+                                    prev.map((t) => t.tierId === tier.tierId ? { ...t, rate: newRate } : t)
+                                  )
+                                }}
+                                className="text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 pr-8"
+                                placeholder="0"
+                              />
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              ) : null}
 
               {/* Butonlar */}
               <div className="flex items-center gap-3 pt-6 border-t border-gray-200 dark:border-gray-700 mt-6">
                 <Button
                   variant="outline"
-                  onClick={() => setCommissionModal(false)}
+                  onClick={() => setCommissionModal({ open: false, categoryId: null })}
                   className="flex-1 h-10"
+                  disabled={commissionSaving}
                 >
                   İptal
                 </Button>
-                <Button className="flex-1 h-10 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:via-teal-700 hover:to-cyan-700 shadow-md hover:shadow-lg transition-shadow">
+                <Button
+                  className="flex-1 h-10 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-700 hover:via-teal-700 hover:to-cyan-700 shadow-md hover:shadow-lg transition-shadow"
+                  onClick={saveCommissions}
+                  disabled={commissionLoading || commissionSaving}
+                >
                   <Save className="h-4 w-4 mr-2" />
-                  Kaydet
+                  {commissionSaving ? "Kaydediliyor..." : "Kaydet"}
                 </Button>
               </div>
             </div>
@@ -1235,61 +1210,122 @@ export default function CategoriesPage() {
         {/* Delete Modal */}
         <Dialog open={deleteModal.open} onOpenChange={(open) => setDeleteModal({ open, categoryId: null })}>
           <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-red-600">
-                <Trash2 className="h-5 w-5" />
-                Kategori Silinemez
-              </DialogTitle>
-              <DialogDescription asChild>
-                <div className="pt-4 space-y-4 text-sm">
-                  <p className="font-medium text-gray-900 dark:text-gray-100">
-                    Bu kategori silinemez!
-                  </p>
+            {(() => {
+              const deleteCat = deleteModal.categoryId
+                ? flattenCategories(categories).find(c => c.id === deleteModal.categoryId)
+                : null
+              const hasChildren = deleteCat?.children && deleteCat.children.length > 0
+              const hasProducts = (deleteCat?.productCount || 0) > 0
+              const canDelete = !hasChildren && !hasProducts
 
-                  <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-3">
-                    <div className="flex items-start gap-2">
-                      <span className="text-2xl">⚠️</span>
-                      <div className="space-y-2 flex-1">
-                        <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                          Bu kategoriye bağlı ürünler var
+              return canDelete ? (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-red-600">
+                      <Trash2 className="h-5 w-5" />
+                      Kategori Sil
+                    </DialogTitle>
+                    <DialogDescription asChild>
+                      <div className="pt-4 space-y-4 text-sm">
+                        <p className="text-gray-900 dark:text-gray-100">
+                          <strong>{deleteCat?.name}</strong> kategorisini silmek istediğinize emin misiniz?
                         </p>
-                        <p className="text-xs text-amber-800 dark:text-amber-300">
-                          Kategoriyi silebilmek için öncelikle bu kategoriye bağlı tüm ürünlerin kategorilerini değiştirmeniz gerekmektedir.
+                        <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                          <p className="text-xs text-red-800 dark:text-red-200">
+                            Bu işlem geri alınamaz.
+                          </p>
+                        </div>
+                      </div>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter className="flex gap-2 sm:gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setDeleteModal({ open: false, categoryId: null })}
+                      className="flex-1"
+                      disabled={saving}
+                    >
+                      İptal
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteCategory}
+                      className="flex-1"
+                      disabled={saving}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {saving ? "Siliniyor..." : "Sil"}
+                    </Button>
+                  </DialogFooter>
+                </>
+              ) : (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-red-600">
+                      <Trash2 className="h-5 w-5" />
+                      Kategori Silinemez
+                    </DialogTitle>
+                    <DialogDescription asChild>
+                      <div className="pt-4 space-y-4 text-sm">
+                        <p className="font-medium text-gray-900 dark:text-gray-100">
+                          Bu kategori silinemez!
                         </p>
-                      </div>
-                    </div>
 
-                    <div className="bg-white dark:bg-gray-900 rounded-md p-3 border border-amber-200 dark:border-amber-800">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-600 dark:text-gray-400">
-                          Bu kategorideki ürün sayısı:
-                        </span>
-                        <span className="text-sm font-bold text-amber-700 dark:text-amber-400">
-                          {deleteModal.categoryId
-                            ? flattenCategories(categories).find(c => c.id === deleteModal.categoryId)?.productCount || 0
-                            : 0} Ürün
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 space-y-3">
+                          <div className="flex items-start gap-2">
+                            <div className="space-y-2 flex-1">
+                              {hasChildren && (
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                  Bu kategoriye bağlı alt kategoriler var
+                                </p>
+                              )}
+                              {hasProducts && (
+                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                  Bu kategoriye bağlı ürünler var
+                                </p>
+                              )}
+                              <p className="text-xs text-amber-800 dark:text-amber-300">
+                                {hasChildren
+                                  ? "Kategoriyi silebilmek için önce alt kategorileri taşıyın veya silin."
+                                  : "Kategoriyi silebilmek için öncelikle bu kategoriye bağlı tüm ürünlerin kategorilerini değiştirmeniz gerekmektedir."}
+                              </p>
+                            </div>
+                          </div>
 
-                  <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                    <p className="text-xs text-blue-800 dark:text-blue-200">
-                      💡 <strong>İpucu:</strong> Ürünlerin kategorilerini değiştirmek için "Ürün Listesi" sayfasına gidin.
-                    </p>
-                  </div>
-                </div>
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setDeleteModal({ open: false, categoryId: null })}
-                className="w-full"
-              >
-                Anladım
-              </Button>
-            </DialogFooter>
+                          {hasProducts && (
+                            <div className="bg-white dark:bg-gray-900 rounded-md p-3 border border-amber-200 dark:border-amber-800">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-600 dark:text-gray-400">
+                                  Bu kategorideki ürün sayısı:
+                                </span>
+                                <span className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                                  {deleteCat?.productCount || 0} Ürün
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                          <p className="text-xs text-blue-800 dark:text-blue-200">
+                            <strong>İpucu:</strong> {hasChildren ? "Alt kategorileri yönetmek için ilgili kategoriye gidin." : "Ürünlerin kategorilerini değiştirmek için \"Ürün Listesi\" sayfasına gidin."}
+                          </p>
+                        </div>
+                      </div>
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setDeleteModal({ open: false, categoryId: null })}
+                      className="w-full"
+                    >
+                      Anladım
+                    </Button>
+                  </DialogFooter>
+                </>
+              )
+            })()}
           </DialogContent>
         </Dialog>
       </div>

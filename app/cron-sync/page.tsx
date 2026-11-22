@@ -1,580 +1,345 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table"
 import {
-  RefreshCw,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  Database,
-  PlayCircle,
-  StopCircle,
-  Activity,
-  Clock,
-  Package,
-  AlertCircle,
-  FileText,
+  RefreshCw, CheckCircle, XCircle, PlayCircle, StopCircle, Activity, Clock, Loader2, AlertCircle, Package, Boxes,
 } from "lucide-react"
-import { Progress } from "@/components/ui/progress"
+import { syncApiService } from "@/lib/api"
+import type { SyncStatusResponse, SyncTriggerMode } from "@/lib/api/sync.service"
+import { useToast } from "@/hooks/use-toast"
 
-// Supplier sync type
-type SupplierSync = {
-  id: string
-  name: string
-  status: "running" | "success" | "error" | "idle"
-  lastSync: string
-  nextSync: string
-  productsFound: number
-  productsNotFound: number
-  productsUpdated: number
-  productsCreated: number
-  syncDuration: number
-  errors: {
-    message: string
-    productSku?: string
-    timestamp: string
-    errorType: string
-  }[]
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr)
+  return d.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })
+}
+
+function statusBadge(status: 'success' | 'error') {
+  return status === 'success'
+    ? <Badge className="bg-green-100 text-green-700 border-green-300 hover:bg-green-100">Başarılı</Badge>
+    : <Badge className="bg-red-100 text-red-700 border-red-300 hover:bg-red-100">Hata</Badge>
+}
+
+const STEP_LABELS: Record<string, string> = {
+  idle: 'Boşta',
+  fetching: 'Tedarikçiden veri çekiliyor',
+  normalizing: 'Veri standartlaştırılıyor',
+  upserting: 'Veritabanına yazılıyor',
+  recalculating: 'Fiyatlar yeniden hesaplanıyor',
+  finalizing: 'Tamamlanıyor',
 }
 
 export default function CronSyncPage() {
-  const [currentTime, setCurrentTime] = useState<Date | null>(null)
-  const [errorSheet, setErrorSheet] = useState<{ open: boolean; supplier: SupplierSync | null }>({
-    open: false,
-    supplier: null,
-  })
+  const { toast } = useToast()
+  const [data, setData] = useState<SyncStatusResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
-  useEffect(() => {
-    setCurrentTime(new Date())
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-    return () => clearInterval(timer)
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await syncApiService.getStatus()
+      if (res.success && res.data) setData(res.data)
+    } catch {
+      // Polling devam etsin
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const formatNumber = (num: number) => {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
-  }
+  useEffect(() => {
+    fetchStatus()
+    // Sync çalışırken canlı izleme için 1sn polling, idle'da 15sn
+    const interval = setInterval(() => fetchStatus(), data?.isRunning ? 1000 : 15000)
+    return () => clearInterval(interval)
+  }, [fetchStatus, data?.isRunning])
 
-  // Sample supplier sync data - gerçekte API'den gelecek
-  const suppliers: SupplierSync[] = [
-    {
-      id: "1",
-      name: "Cullas",
-      status: "running",
-      lastSync: "2024-01-15 14:30:00",
-      nextSync: "2024-01-15 15:00:00",
-      productsFound: 18750,
-      productsNotFound: 355,
-      productsUpdated: 420,
-      productsCreated: 85,
-      syncDuration: 125,
-      errors: [],
-    },
-    {
-      id: "2",
-      name: "Ital",
-      status: "success",
-      lastSync: "2024-01-15 14:45:00",
-      nextSync: "2024-01-15 15:45:00",
-      productsFound: 12340,
-      productsNotFound: 0,
-      productsUpdated: 230,
-      productsCreated: 45,
-      syncDuration: 98,
-      errors: [],
-    },
-    {
-      id: "3",
-      name: "GoogleSheets",
-      status: "error",
-      lastSync: "2024-01-15 13:00:00",
-      nextSync: "2024-01-15 15:00:00",
-      productsFound: 0,
-      productsNotFound: 0,
-      productsUpdated: 0,
-      productsCreated: 0,
-      syncDuration: 0,
-      errors: [
-        {
-          message: "API bağlantısı kurulamadı: Connection timeout",
-          timestamp: "2024-01-15 13:00:05",
-          errorType: "CONNECTION_ERROR",
-        },
-        {
-          message: "API authentication başarısız: Invalid token",
-          timestamp: "2024-01-15 13:00:08",
-          errorType: "AUTH_ERROR",
-        },
-        {
-          message: "SSL certificate verification failed",
-          timestamp: "2024-01-15 13:00:10",
-          errorType: "SSL_ERROR",
-        },
-      ],
-    },
-    {
-      id: "4",
-      name: "Mapas",
-      status: "success",
-      lastSync: "2024-01-15 14:00:00",
-      nextSync: "2024-01-15 16:00:00",
-      productsFound: 8920,
-      productsNotFound: 124,
-      productsUpdated: 156,
-      productsCreated: 28,
-      syncDuration: 78,
-      errors: [],
-    },
-    {
-      id: "5",
-      name: "Bizimhesap",
-      status: "success",
-      lastSync: "2024-01-15 12:30:00",
-      nextSync: "2024-01-15 16:30:00",
-      productsFound: 5640,
-      productsNotFound: 89,
-      productsUpdated: 95,
-      productsCreated: 12,
-      syncDuration: 65,
-      errors: [],
-    },
-    {
-      id: "6",
-      name: "Pars",
-      status: "idle",
-      lastSync: "2024-01-14 18:00:00",
-      nextSync: "2024-01-15 18:00:00",
-      productsFound: 15230,
-      productsNotFound: 245,
-      productsUpdated: 0,
-      productsCreated: 0,
-      syncDuration: 0,
-      errors: [],
-    },
-    {
-      id: "7",
-      name: "Catpower",
-      status: "success",
-      lastSync: "2024-01-15 13:30:00",
-      nextSync: "2024-01-15 17:30:00",
-      productsFound: 4320,
-      productsNotFound: 45,
-      productsUpdated: 78,
-      productsCreated: 15,
-      syncDuration: 54,
-      errors: [],
-    },
-    {
-      id: "8",
-      name: "Akinziraat",
-      status: "success",
-      lastSync: "2024-01-15 14:15:00",
-      nextSync: "2024-01-15 16:15:00",
-      productsFound: 6780,
-      productsNotFound: 67,
-      productsUpdated: 112,
-      productsCreated: 22,
-      syncDuration: 68,
-      errors: [],
-    },
-    {
-      id: "9",
-      name: "Dovizsheet",
-      status: "success",
-      lastSync: "2024-01-15 13:45:00",
-      nextSync: "2024-01-15 15:45:00",
-      productsFound: 3450,
-      productsNotFound: 28,
-      productsUpdated: 56,
-      productsCreated: 9,
-      syncDuration: 42,
-      errors: [],
-    },
-    {
-      id: "10",
-      name: "Civaner",
-      status: "running",
-      lastSync: "2024-01-15 14:20:00",
-      nextSync: "2024-01-15 16:20:00",
-      productsFound: 9820,
-      productsNotFound: 156,
-      productsUpdated: 198,
-      productsCreated: 34,
-      syncDuration: 88,
-      errors: [],
-    },
-    {
-      id: "11",
-      name: "AbmHirdavat",
-      status: "success",
-      lastSync: "2024-01-15 12:50:00",
-      nextSync: "2024-01-15 16:50:00",
-      productsFound: 7650,
-      productsNotFound: 92,
-      productsUpdated: 134,
-      productsCreated: 18,
-      syncDuration: 72,
-      errors: [],
-    },
-    {
-      id: "12",
-      name: "Gedizstoksheet",
-      status: "success",
-      lastSync: "2024-01-15 13:10:00",
-      nextSync: "2024-01-15 17:10:00",
-      productsFound: 5230,
-      productsNotFound: 58,
-      productsUpdated: 89,
-      productsCreated: 14,
-      syncDuration: 59,
-      errors: [],
-    },
-  ]
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "running":
-        return (
-          <Badge className="bg-blue-500 text-white text-xs flex items-center gap-1">
-            <RefreshCw className="h-3 w-3 animate-spin" />
-            Senkronizasyon Çalışıyor
-          </Badge>
-        )
-      case "success":
-        return (
-          <Badge className="bg-green-500 text-white text-xs flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" />
-            Tamamlandı
-          </Badge>
-        )
-      case "error":
-        return (
-          <Badge variant="destructive" className="text-xs flex items-center gap-1">
-            <XCircle className="h-3 w-3" />
-            Hata
-          </Badge>
-        )
-      case "idle":
-        return (
-          <Badge variant="secondary" className="text-xs flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            Beklemede
-          </Badge>
-        )
-      default:
-        return null
+  const handleSyncAll = async (mode: SyncTriggerMode = 'full') => {
+    setActionLoading(`all-${mode}`)
+    try {
+      await syncApiService.triggerAll(mode)
+      toast({
+        title: "Sync başlatıldı",
+        description: mode === 'full'
+          ? "Tüm katalog güncelleniyor (uzun sürecek)"
+          : "Envanter ürünleri güncelleniyor"
+      })
+      setTimeout(fetchStatus, 1000)
+    } catch (err: any) {
+      toast({ title: "Hata", description: err.message || "Sync başlatılamadı", variant: "destructive" })
+    } finally {
+      setActionLoading(null)
     }
   }
 
-  const getTimeUntilNextSync = (nextSync: string) => {
-    if (!currentTime) return "-"
-    const next = new Date(nextSync)
-    const diff = next.getTime() - currentTime.getTime()
-    if (diff < 0) return "Yakında başlayacak"
-
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-
-    if (hours > 0) {
-      return `${hours}s ${minutes}d ${seconds}sn`
-    } else if (minutes > 0) {
-      return `${minutes}d ${seconds}sn`
-    } else {
-      return `${seconds}sn`
+  const handleSyncSupplier = async (supplierName: string, mode: SyncTriggerMode = 'full') => {
+    setActionLoading(`${supplierName}-${mode}`)
+    try {
+      await syncApiService.triggerSupplier(supplierName, mode)
+      toast({
+        title: "Sync başlatıldı",
+        description: `${supplierName} ${mode === 'inventory' ? '(envanter)' : '(tüm katalog)'} sync ediliyor`
+      })
+      setTimeout(fetchStatus, 1000)
+    } catch (err: any) {
+      toast({ title: "Hata", description: err.message || "Sync başlatılamadı", variant: "destructive" })
+    } finally {
+      setActionLoading(null)
     }
   }
 
-  const runningCount = suppliers.filter(s => s.status === "running").length
-  const successCount = suppliers.filter(s => s.status === "success").length
-  const errorCount = suppliers.filter(s => s.status === "error").length
+  const handleStopSync = async () => {
+    if (!confirm("Sync lock'unu serbest bırakmak istediğinize emin misiniz?")) return
+    setActionLoading('stop')
+    try {
+      await syncApiService.stop()
+      toast({ title: "Lock serbest bırakıldı", description: "Yeni sync başlatılabilir" })
+      fetchStatus()
+    } catch (err: any) {
+      toast({ title: "Hata", description: err.message, variant: "destructive" })
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      </MainLayout>
+    )
+  }
+
+  const supplierEntries = data ? Object.entries(data.suppliers) : []
 
   return (
     <MainLayout>
-      <div className="p-6 space-y-6">
-        {/* Header */}
+      <div className="p-8 space-y-6 bg-gray-50/50 dark:bg-gray-900">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-              <RefreshCw className="h-5 w-5 text-blue-600" />
-              Cron Senkronizasyon Raporu
-            </h1>
-            <p className="text-xs text-muted-foreground mt-1">
-              Tedarikçi senkronizasyon durumu - Canlı izleme
-            </p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tedarikçi Sync</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Cron job durumu ve manuel tetikleme</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-xs text-muted-foreground flex items-center gap-2">
-              <Activity className="h-3 w-3 animate-pulse text-green-600" />
-              {currentTime ? currentTime.toLocaleTimeString('tr-TR') : '--:--:--'}
-            </div>
+            <Button variant="outline" size="sm" onClick={fetchStatus} className="bg-white">
+              <RefreshCw className="h-4 w-4 mr-2" /> Yenile
+            </Button>
+            {data?.isRunning ? (
+              <Button variant="destructive" size="sm" onClick={handleStopSync} disabled={actionLoading === 'stop'}>
+                {actionLoading === 'stop' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <StopCircle className="h-4 w-4 mr-2" />}
+                Lock'u Serbest Bırak
+              </Button>
+            ) : (
+              <>
+                <Button size="sm" variant="outline" onClick={() => handleSyncAll('inventory')} disabled={!!actionLoading} className="border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+                  {actionLoading === 'all-inventory' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Boxes className="h-4 w-4 mr-2" />}
+                  Envanter Stok Güncelle
+                </Button>
+                <Button size="sm" onClick={() => handleSyncAll('full')} disabled={!!actionLoading} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  {actionLoading === 'all-full' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Package className="h-4 w-4 mr-2" />}
+                  Tüm Katalog Sync
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid gap-3 md:grid-cols-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Toplam Tedarikçi</p>
-                  <p className="text-2xl font-bold mt-1">{suppliers.length}</p>
+        {data?.isRunning ? (
+          <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="relative flex h-3 w-3 flex-shrink-0">
+                  <div className="animate-ping absolute h-full w-full rounded-full bg-blue-400 opacity-75"></div>
+                  <div className="relative rounded-full h-3 w-3 bg-blue-500"></div>
                 </div>
-                <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                  <Database className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-blue-900 dark:text-blue-100">
+                    {data.progress?.currentSupplier
+                      ? `${data.progress.currentSupplier} sync ediliyor`
+                      : 'Sync çalışıyor'}
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    {data.progress?.message || 'İşlem arka planda devam ediyor'}
+                  </p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Çalışıyor</p>
-                  <p className="text-2xl font-bold mt-1 text-blue-600">{runningCount}</p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-950 flex items-center justify-center">
-                  <RefreshCw className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-spin" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Başarılı</p>
-                  <p className="text-2xl font-bold mt-1 text-green-600">{successCount}</p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Hatalı</p>
-                  <p className="text-2xl font-bold mt-1 text-red-600">{errorCount}</p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
-                  <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Supplier Cards Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {suppliers.map((supplier) => (
-            <Card key={supplier.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base font-semibold">{supplier.name}</CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Son sync: {supplier.lastSync}
-                    </p>
-                  </div>
-                  {getStatusBadge(supplier.status)}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Progress for running */}
-                {supplier.status === "running" && (
-                  <div className="space-y-2">
-                    <Progress value={65} className="h-2" />
-                    <p className="text-xs text-muted-foreground text-center">
-                      İşleniyor... {supplier.syncDuration}s
-                    </p>
-                  </div>
+                {data.progress && (
+                  <Badge variant="outline" className="bg-white border-blue-300 text-blue-700 text-xs whitespace-nowrap">
+                    {STEP_LABELS[data.progress.currentStep] || data.progress.currentStep}
+                  </Badge>
                 )}
+              </div>
 
-                {/* Products Info */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      <span className="text-xs font-medium text-green-700 dark:text-green-300">
-                        Bulundu
-                      </span>
-                    </div>
-                    <div className="text-lg font-bold text-green-700 dark:text-green-300">
-                      {formatNumber(supplier.productsFound)}
-                    </div>
-                    <div className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      Ürün
-                    </div>
+              {/* Progress bar */}
+              {data.progress && data.progress.total > 0 && (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs text-blue-700 dark:text-blue-300">
+                    <span>{data.progress.processed.toLocaleString('tr-TR')} / {data.progress.total.toLocaleString('tr-TR')} ürün</span>
+                    <span>%{Math.round((data.progress.processed / data.progress.total) * 100)}</span>
                   </div>
-
-                  <div className="bg-red-50 dark:bg-red-950 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                      <span className="text-xs font-medium text-red-700 dark:text-red-300">
-                        Bulunamadı
-                      </span>
-                    </div>
-                    <div className="text-lg font-bold text-red-700 dark:text-red-300">
-                      {formatNumber(supplier.productsNotFound)}
-                    </div>
-                    <div className="text-xs text-red-600 dark:text-red-400 mt-1">
-                      Ürün
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <RefreshCw className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                        Güncellendi
-                      </span>
-                    </div>
-                    <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                      {formatNumber(supplier.productsUpdated)}
-                    </div>
-                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                      Ürün
-                    </div>
-                  </div>
-
-                  <div className="bg-purple-50 dark:bg-purple-950 p-3 rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Package className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                      <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
-                        Yeni Eklendi
-                      </span>
-                    </div>
-                    <div className="text-lg font-bold text-purple-700 dark:text-purple-300">
-                      {formatNumber(supplier.productsCreated)}
-                    </div>
-                    <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                      Ürün
-                    </div>
+                  <div className="h-2 bg-blue-200 dark:bg-blue-900 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                      style={{ width: `${Math.min(100, (data.progress.processed / data.progress.total) * 100)}%` }}
+                    />
                   </div>
                 </div>
+              )}
 
-                {/* Error Box */}
-                {supplier.errors.length > 0 && (
-                  <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-red-600" />
-                        <span className="text-sm font-semibold text-red-700 dark:text-red-300">
-                          {supplier.errors.length} Hata Bulundu
-                        </span>
-                      </div>
+              {/* Live counters */}
+              {data.progress && (data.progress.createdCount > 0 || data.progress.updatedCount > 0 || data.progress.skippedCount > 0) && (
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-white dark:bg-gray-800 rounded p-2 text-center border border-blue-200">
+                    <div className="font-bold text-blue-700 dark:text-blue-300 text-base">{data.progress.createdCount}</div>
+                    <div className="text-gray-500">Yeni</div>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded p-2 text-center border border-amber-200">
+                    <div className="font-bold text-amber-700 dark:text-amber-300 text-base">{data.progress.updatedCount}</div>
+                    <div className="text-gray-500">Güncellendi</div>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded p-2 text-center border border-gray-200">
+                    <div className="font-bold text-gray-700 dark:text-gray-300 text-base">{data.progress.skippedCount}</div>
+                    <div className="text-gray-500">Atlandı</div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-gray-200 bg-white dark:bg-gray-800">
+            <CardContent className="p-4 flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-gray-400" />
+              <p className="text-sm text-gray-700 dark:text-gray-300">Sync boşta — yeni sync başlatılabilir</p>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Tedarikçiler
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {supplierEntries.length === 0 ? (
+                <div className="col-span-full text-center text-gray-500 py-8">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                  Aktif tedarikçi yok
+                </div>
+              ) : supplierEntries.map(([name, info]) => (
+                <div key={name} className="border rounded-lg p-3 bg-white dark:bg-gray-800 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3 className="font-medium text-sm">{name}</h3>
+                      {info ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          {info.status === 'success'
+                            ? <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                            : <XCircle className="h-3.5 w-3.5 text-red-600" />}
+                          <span className="text-xs text-gray-500">{formatDate(info.lastRun)}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">Hiç sync yapılmadı</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
                       <Button
-                        variant="ghost"
                         size="sm"
-                        className="text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900 h-7"
-                        onClick={() => setErrorSheet({ open: true, supplier })}
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => handleSyncSupplier(name, 'inventory')}
+                        disabled={!!actionLoading || data?.isRunning}
+                        title="Sadece envanter ürünlerini güncelle"
                       >
-                        <FileText className="h-3 w-3 mr-1" />
-                        Detaylar
+                        {actionLoading === `${name}-inventory` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Boxes className="h-3.5 w-3.5 text-emerald-600" />}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={() => handleSyncSupplier(name, 'full')}
+                        disabled={!!actionLoading || data?.isRunning}
+                        title="Tüm katalogu sync et"
+                      >
+                        {actionLoading === `${name}-full` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlayCircle className="h-3.5 w-3.5 text-blue-600" />}
                       </Button>
                     </div>
                   </div>
-                )}
-
-                {/* Next Sync Info */}
-                <div className="flex items-center justify-between pt-2 border-t">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    Sonraki sync:
-                  </div>
-                  <div className="text-xs font-semibold">
-                    {getTimeUntilNextSync(supplier.nextSync)}
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    disabled={supplier.status === "running"}
-                  >
-                    <PlayCircle className="h-3 w-3 mr-1" />
-                    Başlat
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    disabled={supplier.status !== "running"}
-                  >
-                    <StopCircle className="h-3 w-3 mr-1" />
-                    Durdur
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Error Details Sheet */}
-        <Sheet open={errorSheet.open} onOpenChange={(open) => setErrorSheet({ open, supplier: null })}>
-          <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-6">
-            <SheetHeader className="mb-6">
-              <SheetTitle>Hata Detayları</SheetTitle>
-              <SheetDescription>
-                {errorSheet.supplier?.name} - Senkronizasyon hataları
-              </SheetDescription>
-            </SheetHeader>
-
-            {errorSheet.supplier && (
-              <div className="space-y-4">
-                {errorSheet.supplier.errors.map((error, index) => (
-                  <div
-                    key={index}
-                    className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4"
-                  >
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
-                          <Badge variant="destructive" className="text-xs">
-                            {error.errorType}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {error.timestamp}
-                          </span>
-                        </div>
-                        <p className="text-sm text-red-900 dark:text-red-100 font-medium">
-                          {error.message}
-                        </p>
-                        {error.productSku && (
-                          <p className="text-xs text-red-700 dark:text-red-300 mt-2">
-                            SKU: {error.productSku}
-                          </p>
-                        )}
+                  {info && (
+                    <div className="grid grid-cols-3 gap-1 mt-2 text-[10px] text-center">
+                      <div className="bg-blue-50 dark:bg-blue-950/30 rounded p-1.5">
+                        <div className="font-bold text-blue-700 dark:text-blue-300">{info.createdCount}</div>
+                        <div className="text-gray-500">Yeni</div>
+                      </div>
+                      <div className="bg-amber-50 dark:bg-amber-950/30 rounded p-1.5">
+                        <div className="font-bold text-amber-700 dark:text-amber-300">{info.updatedCount}</div>
+                        <div className="text-gray-500">Güncel</div>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-gray-900/30 rounded p-1.5">
+                        <div className="font-bold text-gray-700 dark:text-gray-300">{info.totalCount}</div>
+                        <div className="text-gray-500">Toplam</div>
                       </div>
                     </div>
-                  </div>
+                  )}
+                  {info?.error && (
+                    <div className="mt-2 p-2 bg-red-50 dark:bg-red-950/20 rounded text-[10px] text-red-700 dark:text-red-400 line-clamp-2" title={info.error}>
+                      {info.error}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Son Sync Logları
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Tedarikçi</TableHead>
+                  <TableHead className="text-xs">Durum</TableHead>
+                  <TableHead className="text-xs">Yeni</TableHead>
+                  <TableHead className="text-xs">Güncel</TableHead>
+                  <TableHead className="text-xs">Toplam</TableHead>
+                  <TableHead className="text-xs">Süre</TableHead>
+                  <TableHead className="text-xs">Tarih</TableHead>
+                  <TableHead className="text-xs">Hata</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!data?.recentLogs.length ? (
+                  <TableRow><TableCell colSpan={8} className="text-center text-gray-500 py-8">Log kaydı yok</TableCell></TableRow>
+                ) : data.recentLogs.map(log => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-xs font-medium">{log.supplierName}</TableCell>
+                    <TableCell>{statusBadge(log.status)}</TableCell>
+                    <TableCell className="text-xs">{log.createdCount}</TableCell>
+                    <TableCell className="text-xs">{log.updatedCount}</TableCell>
+                    <TableCell className="text-xs">{log.totalCount}</TableCell>
+                    <TableCell className="text-xs">{log.duration ? `${parseFloat(log.duration).toFixed(1)}s` : '-'}</TableCell>
+                    <TableCell className="text-xs text-gray-500">{formatDate(log.createdAt)}</TableCell>
+                    <TableCell className="text-xs text-red-600 max-w-[200px] truncate" title={log.error || ''}>{log.error || '-'}</TableCell>
+                  </TableRow>
                 ))}
-              </div>
-            )}
-          </SheetContent>
-        </Sheet>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
     </MainLayout>
   )

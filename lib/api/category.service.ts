@@ -10,6 +10,9 @@ import type {
   CreateCategoryDto,
   UpdateCategoryDto,
   ReorderCategoryDto,
+  CommissionData,
+  UpdateCommissionsDto,
+  BulkUpdateCommissionsDto,
 } from './types';
 
 const BASE_URL = '/api/categories';
@@ -62,5 +65,26 @@ export const categoryService = {
    */
   reorder: async (data: ReorderCategoryDto): Promise<ApiResponse<void>> => {
     return api.post<ApiResponse<void>>(`${BASE_URL}/reorder`, data);
+  },
+
+  /**
+   * Kategorinin komisyon oranlarını getir
+   */
+  getCommissions: async (categoryId: string): Promise<ApiResponse<CommissionData>> => {
+    return api.get<ApiResponse<CommissionData>>(`${BASE_URL}/${categoryId}/commissions`);
+  },
+
+  /**
+   * Kategorinin komisyon oranlarını güncelle
+   */
+  updateCommissions: async (categoryId: string, data: UpdateCommissionsDto): Promise<ApiResponse<void>> => {
+    return api.put<ApiResponse<void>>(`${BASE_URL}/${categoryId}/commissions`, data);
+  },
+
+  /**
+   * Birden fazla kategoriye aynı komisyon oranlarını uygula
+   */
+  bulkUpdateCommissions: async (data: BulkUpdateCommissionsDto): Promise<ApiResponse<void>> => {
+    return api.post<ApiResponse<void>>(`${BASE_URL}/bulk-commissions`, data);
   },
 };

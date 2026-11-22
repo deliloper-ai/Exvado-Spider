@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   Dialog,
   DialogContent,
@@ -21,29 +21,138 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import {
   Info,
-  Tag,
-  Image as ImageIcon,
-  Search,
   DollarSign,
+  Search,
+  List,
   Loader2,
-  X,
-  Upload,
-  Trash2
+  Plus,
+  Trash2,
 } from "lucide-react"
-import { productsApi, categoriesApi, brandsApi, suppliersApi, dealerClassesApi } from "@/lib/api"
+import {
+  productService,
+  categoryService,
+  desiService,
+  supplierService,
+} from "@/lib/api"
 import type {
   Product,
   CreateProductDto,
-  UpdateProductDto,
-  Category,
-  Brand,
+  CategoryTree,
+  DesiFrontend,
   Supplier,
-  DealerClass
 } from "@/lib/api/types"
+
+// --- Helpers ---
+
+function flattenTree(
+  nodes: CategoryTree[],
+  depth = 0
+): { id: string; name: string; depth: number }[] {
+  const result: { id: string; name: string; depth: number }[] = []
+  for (const node of nodes) {
+    result.push({ id: node.id, name: node.name, depth })
+    if (node.children?.length) {
+      result.push(...flattenTree(node.children, depth + 1))
+    }
+  }
+  return result
+}
+
+// --- Types ---
+
+interface FormData {
+  name: string
+  supplier: string
+  stockCode: string
+  brand: string
+  barcode: string
+  desi: string
+  categoryId: string
+  tedarikciFiyat: string
+  productDiscount: string
+  bolbolbulFiyat: string
+  sopyoFiyat: string
+  n11Fiyat: string
+  trendyolFiyat: string
+  hepsiburadaFiyat: string
+  pazaramaFiyat: string
+  toplamStock: string
+  bolbolbulStock: string
+  sopyoStock: string
+  kdv: string
+  eticaret: boolean
+  sopyo: boolean
+  isFiyatTercih: boolean
+  metaTitle: string
+  metaDescription: string
+  detayBilgileri: string
+  attributes: { Name: string; Value: string }[]
+}
+
+const EMPTY_FORM: FormData = {
+  name: "",
+  supplier: "",
+  stockCode: "",
+  brand: "",
+  barcode: "",
+  desi: "",
+  categoryId: "",
+  tedarikciFiyat: "",
+  productDiscount: "",
+  bolbolbulFiyat: "",
+  sopyoFiyat: "",
+  n11Fiyat: "",
+  trendyolFiyat: "",
+  hepsiburadaFiyat: "",
+  pazaramaFiyat: "",
+  toplamStock: "0",
+  bolbolbulStock: "0",
+  sopyoStock: "0",
+  kdv: "20",
+  eticaret: true,
+  sopyo: false,
+  isFiyatTercih: false,
+  metaTitle: "",
+  metaDescription: "",
+  detayBilgileri: "",
+  attributes: [],
+}
+
+function productToForm(p: Product): FormData {
+  return {
+    name: p.name || "",
+    supplier: p.supplier || "",
+    stockCode: p.stockCode || "",
+    brand: p.brand || "",
+    barcode: p.barcode || "",
+    desi: p.desi?.toString() || "",
+    categoryId: p.categoryId || "",
+    tedarikciFiyat: p.tedarikciFiyat?.toString() || "",
+    productDiscount: p.productDiscount?.toString() || "",
+    bolbolbulFiyat: p.bolbolbulFiyat?.toString() || "",
+    sopyoFiyat: p.sopyoFiyat?.toString() || "",
+    n11Fiyat: p.n11Fiyat?.toString() || "",
+    trendyolFiyat: p.trendyolFiyat?.toString() || "",
+    hepsiburadaFiyat: p.hepsiburadaFiyat?.toString() || "",
+    pazaramaFiyat: p.pazaramaFiyat?.toString() || "",
+    toplamStock: p.toplamStock?.toString() || "0",
+    bolbolbulStock: p.bolbolbulStock?.toString() || "0",
+    sopyoStock: p.sopyoStock?.toString() || "0",
+    kdv: p.kdv?.toString() || "20",
+    eticaret: p.eticaret ?? true,
+    sopyo: p.sopyo ?? false,
+    isFiyatTercih: p.isFiyatTercih ?? false,
+    metaTitle: p.metaTitle || "",
+    metaDescription: p.metaDescription || "",
+    detayBilgileri: p.detayBilgileri || "",
+    attributes: p.attributes?.length ? p.attributes : [],
+  }
+}
+
+// --- Props ---
 
 interface ProductFormDialogProps {
   open: boolean
@@ -52,329 +161,207 @@ interface ProductFormDialogProps {
   onSuccess: () => void
 }
 
+// --- Component ---
+
 export function ProductFormDialog({
   open,
   onOpenChange,
   product,
-  onSuccess
+  onSuccess,
 }: ProductFormDialogProps) {
   const { toast } = useToast()
   const isEdit = !!product
 
-  // State
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("general")
 
   // Master data
-  const [categories, setCategories] = useState<Category[]>([])
-  const [brands, setBrands] = useState<Brand[]>([])
+  const [categoryTree, setCategoryTree] = useState<CategoryTree[]>([])
+  const [desiList, setDesiList] = useState<DesiFrontend[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [dealerClasses, setDealerClasses] = useState<DealerClass[]>([])
 
-  // Form data - Genel Bilgiler
-  const [formData, setFormData] = useState({
-    name: "",
-    shortDescription: "",
-    description: "",
-    sku: "",
-    barcode: "",
-    gtinCode: "",
-    gtipCode: "",
-    basePrice: "",
-    costPrice: "",
-    discountRate: "",
-    taxRate: "18",
-    stock: "",
-    minStock: "",
-    maxStock: "",
-    brandId: "",
-    supplierId: "",
-    isActive: true,
-    isFeatured: false,
-    videoUrl: "",
-    // SEO
-    metaTitle: "",
-    metaDescription: "",
-    metaKeywords: "",
-    canonicalUrl: "",
-    ogTitle: "",
-    ogDescription: "",
-    ogImage: "",
-    twitterCard: ""
-  })
+  // Form
+  const [form, setForm] = useState<FormData>({ ...EMPTY_FORM })
 
-  // Kategoriler
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [primaryCategoryId, setPrimaryCategoryId] = useState<string>("")
+  // Debounce ref for price calculation
+  const calcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Bayi Fiyatları
-  const [dealerPrices, setDealerPrices] = useState<Array<{
-    dealerClassId: string
-    price: string
-    discountRate: string
-  }>>([])
+  // --- Flattened categories for select ---
+  const flatCategories = flattenTree(categoryTree)
 
-  // Master data yükle
+  // --- Load master data on open ---
   useEffect(() => {
-    if (open) {
-      loadMasterData()
+    if (!open) return
+    const load = async () => {
+      try {
+        const [catRes, desiRes, supRes] = await Promise.all([
+          categoryService.getTree(),
+          desiService.getAll(),
+          supplierService.getAll(),
+        ])
+        if (catRes.data) setCategoryTree(catRes.data)
+        if (desiRes.data) setDesiList(desiRes.data)
+        if (supRes.data) setSuppliers(supRes.data)
+      } catch (err) {
+        console.error("Master veri yüklenemedi:", err)
+      }
     }
+    load()
   }, [open])
 
-  // Düzenleme modunda ürün verilerini yükle
+  // --- Populate form when product changes ---
   useEffect(() => {
     if (product && open) {
-      setFormData({
-        name: product.name || "",
-        shortDescription: product.shortDescription || "",
-        description: product.description || "",
-        sku: product.sku || "",
-        barcode: product.barcode || "",
-        gtinCode: product.gtinCode || "",
-        gtipCode: product.gtipCode || "",
-        basePrice: product.basePrice?.toString() || "",
-        costPrice: product.costPrice?.toString() || "",
-        discountRate: product.discountRate?.toString() || "0",
-        taxRate: product.taxRate?.toString() || "18",
-        stock: product.stock?.toString() || "0",
-        minStock: product.minStock?.toString() || "0",
-        maxStock: product.maxStock?.toString() || "",
-        brandId: product.brandId || "",
-        supplierId: product.supplierId || "",
-        isActive: product.isActive,
-        isFeatured: product.isFeatured,
-        videoUrl: product.videoUrl || "",
-        metaTitle: product.metaTitle || "",
-        metaDescription: product.metaDescription || "",
-        metaKeywords: product.metaKeywords || "",
-        canonicalUrl: product.canonicalUrl || "",
-        ogTitle: product.ogTitle || "",
-        ogDescription: product.ogDescription || "",
-        ogImage: product.ogImage || "",
-        twitterCard: product.twitterCard || ""
-      })
-
-      // Kategorileri yükle
-      if (product.categories) {
-        const catIds = product.categories.map(pc => pc.categoryId)
-        setSelectedCategories(catIds)
-        const primary = product.categories.find(pc => pc.isPrimary)
-        if (primary) setPrimaryCategoryId(primary.categoryId)
-      }
-
-      // Bayi fiyatlarını yükle
-      if (product.dealerPrices) {
-        setDealerPrices(
-          product.dealerPrices.map(dp => ({
-            dealerClassId: dp.dealerClassId,
-            price: dp.price.toString(),
-            discountRate: dp.discountRate?.toString() || "0"
-          }))
-        )
-      }
+      setForm(productToForm(product))
+      setActiveTab("general")
     } else if (!product && open) {
-      // Yeni ürün - formu temizle
-      resetForm()
+      setForm({ ...EMPTY_FORM })
+      setActiveTab("general")
     }
   }, [product, open])
 
-  const loadMasterData = async () => {
-    try {
-      const [cats, brds, sups, dealers] = await Promise.all([
-        categoriesApi.getCategories(),
-        brandsApi.getBrands(),
-        suppliersApi.getSuppliers(),
-        dealerClassesApi.getDealerClasses()
-      ])
-      setCategories(cats)
-      setBrands(brds)
-      setSuppliers(sups)
-      setDealerClasses(dealers)
-    } catch (error: any) {
-      console.error("Master data yüklenemedi:", error)
-    }
-  }
+  // --- Price calculation ---
+  const runPriceCalculation = useCallback(
+    async (tedarikciFiyat: number, categoryId: string, desiValue: number | undefined) => {
+      if (!tedarikciFiyat || !categoryId) return
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      shortDescription: "",
-      description: "",
-      sku: "",
-      barcode: "",
-      gtinCode: "",
-      gtipCode: "",
-      basePrice: "",
-      costPrice: "",
-      discountRate: "0",
-      taxRate: "18",
-      stock: "0",
-      minStock: "0",
-      maxStock: "",
-      brandId: "",
-      supplierId: "",
-      isActive: true,
-      isFeatured: false,
-      videoUrl: "",
-      metaTitle: "",
-      metaDescription: "",
-      metaKeywords: "",
-      canonicalUrl: "",
-      ogTitle: "",
-      ogDescription: "",
-      ogImage: "",
-      twitterCard: ""
-    })
-    setSelectedCategories([])
-    setPrimaryCategoryId("")
-    setDealerPrices([])
-    setActiveTab("general")
-  }
-
-  const handleSubmit = async () => {
-    try {
-      // Validasyon
-      if (!formData.name.trim()) {
-        toast({
-          title: "Hata",
-          description: "Ürün adı zorunludur",
-          variant: "destructive"
-        })
-        return
+      // Find desi price from desiList
+      let desiPrice: number | undefined
+      if (desiValue !== undefined) {
+        const matched = desiList.find((d) => Number(d.name) === desiValue || d.name === String(desiValue))
+        if (matched) desiPrice = matched.price
       }
 
-      if (!formData.basePrice || parseFloat(formData.basePrice) <= 0) {
-        toast({
-          title: "Hata",
-          description: "Geçerli bir fiyat giriniz",
-          variant: "destructive"
+      const discount = form.productDiscount ? parseFloat(form.productDiscount) : undefined
+
+      try {
+        const res = await productService.calculatePrice({
+          tedarikciFiyat,
+          categoryId,
+          supplierDiscount: discount,
+          desiPrice,
         })
-        return
-      }
-
-      setLoading(true)
-
-      const productData: CreateProductDto | UpdateProductDto = {
-        name: formData.name,
-        shortDescription: formData.shortDescription || undefined,
-        description: formData.description || undefined,
-        sku: formData.sku || undefined,
-        barcode: formData.barcode || undefined,
-        gtinCode: formData.gtinCode || undefined,
-        gtipCode: formData.gtipCode || undefined,
-        basePrice: parseFloat(formData.basePrice),
-        costPrice: formData.costPrice ? parseFloat(formData.costPrice) : undefined,
-        discountRate: formData.discountRate ? parseFloat(formData.discountRate) : 0,
-        taxRate: formData.taxRate ? parseFloat(formData.taxRate) : 18,
-        stock: parseInt(formData.stock) || 0,
-        minStock: parseInt(formData.minStock) || 0,
-        maxStock: formData.maxStock ? parseInt(formData.maxStock) : undefined,
-        brandId: formData.brandId && formData.brandId !== 'none' ? formData.brandId : undefined,
-        supplierId: formData.supplierId && formData.supplierId !== 'none' ? formData.supplierId : undefined,
-        isActive: formData.isActive,
-        isFeatured: formData.isFeatured,
-        videoUrl: formData.videoUrl || undefined,
-        metaTitle: formData.metaTitle || undefined,
-        metaDescription: formData.metaDescription || undefined,
-        metaKeywords: formData.metaKeywords || undefined,
-        canonicalUrl: formData.canonicalUrl || undefined,
-        ogTitle: formData.ogTitle || undefined,
-        ogDescription: formData.ogDescription || undefined,
-        ogImage: formData.ogImage || undefined,
-        twitterCard: formData.twitterCard || undefined,
-        categoryIds: selectedCategories,
-        dealerPrices: dealerPrices
-          .filter(dp => dp.dealerClassId && dp.price)
-          .map(dp => ({
-            dealerClassId: dp.dealerClassId,
-            price: parseFloat(dp.price)
+        if (res.data) {
+          setForm((prev) => ({
+            ...prev,
+            bolbolbulFiyat: res.data!.bolbolbulFiyat.toString(),
+            sopyoFiyat: res.data!.sopyoFiyat.toString(),
+            n11Fiyat: res.data!.n11Fiyat.toString(),
+            trendyolFiyat: res.data!.trendyolFiyat.toString(),
+            hepsiburadaFiyat: res.data!.hepsiburadaFiyat.toString(),
+            pazaramaFiyat: res.data!.pazaramaFiyat.toString(),
           }))
+        }
+      } catch (err) {
+        console.error("Fiyat hesaplama hatası:", err)
+      }
+    },
+    [desiList, form.productDiscount]
+  )
+
+  // Debounced price calc when relevant fields change
+  useEffect(() => {
+    if (!open) return
+    const price = parseFloat(form.tedarikciFiyat)
+    const catId = form.categoryId
+    const desiVal = form.desi ? parseFloat(form.desi) : undefined
+
+    if (!price || !catId) return
+
+    if (calcTimerRef.current) clearTimeout(calcTimerRef.current)
+    calcTimerRef.current = setTimeout(() => {
+      runPriceCalculation(price, catId, desiVal)
+    }, 500)
+
+    return () => {
+      if (calcTimerRef.current) clearTimeout(calcTimerRef.current)
+    }
+  }, [form.tedarikciFiyat, form.categoryId, form.desi, form.productDiscount, open, runPriceCalculation])
+
+  // --- Field updater ---
+  const setField = <K extends keyof FormData>(key: K, value: FormData[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  // --- Attributes ---
+  const addAttribute = () => {
+    setForm((prev) => ({
+      ...prev,
+      attributes: [...prev.attributes, { Name: "", Value: "" }],
+    }))
+  }
+
+  const removeAttribute = (index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      attributes: prev.attributes.filter((_, i) => i !== index),
+    }))
+  }
+
+  const updateAttribute = (index: number, field: "Name" | "Value", value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      attributes: prev.attributes.map((attr, i) =>
+        i === index ? { ...attr, [field]: value } : attr
+      ),
+    }))
+  }
+
+  // --- Submit ---
+  const handleSubmit = async () => {
+    if (!form.name.trim()) {
+      toast({ title: "Hata", description: "Ürün adı zorunludur", variant: "destructive" })
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const dto: CreateProductDto = {
+        name: form.name,
+        supplier: form.supplier || undefined,
+        stockCode: form.stockCode || undefined,
+        brand: form.brand || undefined,
+        barcode: form.barcode || undefined,
+        desi: form.desi ? parseFloat(form.desi) : undefined,
+        categoryId: form.categoryId || undefined,
+        tedarikciFiyat: form.tedarikciFiyat ? parseFloat(form.tedarikciFiyat) : undefined,
+        productDiscount: form.productDiscount ? parseFloat(form.productDiscount) : undefined,
+        bolbolbulFiyat: form.bolbolbulFiyat ? parseFloat(form.bolbolbulFiyat) : undefined,
+        sopyoFiyat: form.sopyoFiyat ? parseFloat(form.sopyoFiyat) : undefined,
+        n11Fiyat: form.n11Fiyat ? parseFloat(form.n11Fiyat) : undefined,
+        trendyolFiyat: form.trendyolFiyat ? parseFloat(form.trendyolFiyat) : undefined,
+        hepsiburadaFiyat: form.hepsiburadaFiyat ? parseFloat(form.hepsiburadaFiyat) : undefined,
+        pazaramaFiyat: form.pazaramaFiyat ? parseFloat(form.pazaramaFiyat) : undefined,
+        toplamStock: form.toplamStock ? parseInt(form.toplamStock) : undefined,
+        bolbolbulStock: form.bolbolbulStock ? parseInt(form.bolbolbulStock) : undefined,
+        sopyoStock: form.sopyoStock ? parseInt(form.sopyoStock) : undefined,
+        kdv: form.kdv ? parseFloat(form.kdv) : undefined,
+        eticaret: form.eticaret,
+        sopyo: form.sopyo,
+        isFiyatTercih: form.isFiyatTercih,
+        metaTitle: form.metaTitle || undefined,
+        metaDescription: form.metaDescription || undefined,
+        detayBilgileri: form.detayBilgileri || undefined,
+        attributes: form.attributes.filter((a) => a.Name.trim() && a.Value.trim()),
       }
 
-      let savedProduct: Product
       if (isEdit && product) {
-        savedProduct = await productsApi.updateProduct(product.id, productData)
-
-        // Kategorileri güncelle
-        if (selectedCategories.length > 0) {
-          await productsApi.updateProductCategories(
-            product.id,
-            selectedCategories,
-            primaryCategoryId || undefined
-          )
-        }
-
-        // Bayi fiyatlarını güncelle
-        if (dealerPrices.length > 0) {
-          const validDealerPrices = dealerPrices
-            .filter(dp => dp.dealerClassId && dp.price)
-            .map(dp => ({
-              dealerClassId: dp.dealerClassId,
-              price: parseFloat(dp.price),
-              discountRate: dp.discountRate ? parseFloat(dp.discountRate) : undefined
-            }))
-
-          if (validDealerPrices.length > 0) {
-            await productsApi.bulkUpdateDealerPrices(product.id, validDealerPrices)
-          }
-        }
+        await productService.update(product.id, dto)
+        toast({ title: "Başarılı", description: "Ürün güncellendi" })
       } else {
-        savedProduct = await productsApi.createProduct(productData as CreateProductDto)
+        await productService.create(dto)
+        toast({ title: "Başarılı", description: "Ürün oluşturuldu" })
       }
-
-      toast({
-        title: "Başarılı",
-        description: isEdit ? "Ürün güncellendi" : "Ürün oluşturuldu"
-      })
 
       onSuccess()
       onOpenChange(false)
-      resetForm()
-    } catch (error: any) {
-      toast({
-        title: "Hata",
-        description: error.message || "İşlem başarısız",
-        variant: "destructive"
-      })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "İşlem başarısız"
+      toast({ title: "Hata", description: message, variant: "destructive" })
     } finally {
       setLoading(false)
     }
-  }
-
-  const toggleCategory = (categoryId: string) => {
-    setSelectedCategories(prev => {
-      if (prev.includes(categoryId)) {
-        // Kaldırılıyorsa ve primary ise primary'yi temizle
-        if (primaryCategoryId === categoryId) {
-          setPrimaryCategoryId("")
-        }
-        return prev.filter(id => id !== categoryId)
-      } else {
-        // Ekleniyorsa ve henüz primary yoksa bunu primary yap
-        if (!primaryCategoryId) {
-          setPrimaryCategoryId(categoryId)
-        }
-        return [...prev, categoryId]
-      }
-    })
-  }
-
-  const addDealerPrice = () => {
-    setDealerPrices(prev => [...prev, {
-      dealerClassId: "",
-      price: "",
-      discountRate: "0"
-    }])
-  }
-
-  const removeDealerPrice = (index: number) => {
-    setDealerPrices(prev => prev.filter((_, i) => i !== index))
-  }
-
-  const updateDealerPrice = (index: number, field: string, value: string) => {
-    setDealerPrices(prev => prev.map((dp, i) =>
-      i === index ? { ...dp, [field]: value } : dp
-    ))
   }
 
   return (
@@ -390,70 +377,44 @@ export function ProductFormDialog({
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="general">
               <Info className="h-4 w-4 mr-2" />
-              Genel
+              Genel Bilgiler
             </TabsTrigger>
-            <TabsTrigger value="categories">
-              <Tag className="h-4 w-4 mr-2" />
-              Kategoriler
-            </TabsTrigger>
-            <TabsTrigger value="dealer-prices">
+            <TabsTrigger value="pricing">
               <DollarSign className="h-4 w-4 mr-2" />
-              Bayi Fiyatları
+              Fiyatlar & Stok
             </TabsTrigger>
             <TabsTrigger value="seo">
               <Search className="h-4 w-4 mr-2" />
-              SEO
+              SEO & İçerik
             </TabsTrigger>
-            <TabsTrigger value="images" disabled={!isEdit}>
-              <ImageIcon className="h-4 w-4 mr-2" />
-              Görseller
+            <TabsTrigger value="attributes">
+              <List className="h-4 w-4 mr-2" />
+              Özellikler
             </TabsTrigger>
           </TabsList>
 
-          {/* GENEL BİLGİLER */}
+          {/* ========== GENEL BİLGİLER ========== */}
           <TabsContent value="general" className="space-y-4 mt-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <Label htmlFor="name">Ürün Adı *</Label>
                 <Input
                   id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  value={form.name}
+                  onChange={(e) => setField("name", e.target.value)}
                   placeholder="Ürün adını girin"
                 />
               </div>
 
-              <div className="col-span-2">
-                <Label htmlFor="shortDescription">Kısa Açıklama</Label>
-                <Textarea
-                  id="shortDescription"
-                  value={formData.shortDescription}
-                  onChange={(e) => setFormData({ ...formData, shortDescription: e.target.value })}
-                  placeholder="Kısa açıklama (listelemelerde gösterilecek)"
-                  rows={2}
-                />
-              </div>
-
-              <div className="col-span-2">
-                <Label htmlFor="description">Detaylı Açıklama</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Ürün detayları"
-                  rows={4}
-                />
-              </div>
-
               <div>
-                <Label htmlFor="sku">SKU</Label>
+                <Label htmlFor="stockCode">Stok Kodu</Label>
                 <Input
-                  id="sku"
-                  value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                  id="stockCode"
+                  value={form.stockCode}
+                  onChange={(e) => setField("stockCode", e.target.value)}
                   placeholder="Stok kodu"
                 />
               </div>
@@ -462,454 +423,368 @@ export function ProductFormDialog({
                 <Label htmlFor="barcode">Barkod</Label>
                 <Input
                   id="barcode"
-                  value={formData.barcode}
-                  onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                  value={form.barcode}
+                  onChange={(e) => setField("barcode", e.target.value)}
                   placeholder="Barkod numarası"
                 />
               </div>
 
               <div>
-                <Label htmlFor="gtinCode">GTIN Kodu</Label>
+                <Label htmlFor="brand">Marka</Label>
                 <Input
-                  id="gtinCode"
-                  value={formData.gtinCode}
-                  onChange={(e) => setFormData({ ...formData, gtinCode: e.target.value })}
-                  placeholder="GTIN kodu"
+                  id="brand"
+                  value={form.brand}
+                  onChange={(e) => setField("brand", e.target.value)}
+                  placeholder="Marka adı"
                 />
               </div>
 
               <div>
-                <Label htmlFor="gtipCode">GTIP Kodu</Label>
-                <Input
-                  id="gtipCode"
-                  value={formData.gtipCode}
-                  onChange={(e) => setFormData({ ...formData, gtipCode: e.target.value })}
-                  placeholder="GTIP kodu"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="basePrice">Fiyat (₺) *</Label>
-                <Input
-                  id="basePrice"
-                  type="number"
-                  step="0.01"
-                  value={formData.basePrice}
-                  onChange={(e) => setFormData({ ...formData, basePrice: e.target.value })}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="costPrice">Maliyet (₺)</Label>
-                <Input
-                  id="costPrice"
-                  type="number"
-                  step="0.01"
-                  value={formData.costPrice}
-                  onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="discountRate">İndirim Oranı (%)</Label>
-                <Input
-                  id="discountRate"
-                  type="number"
-                  step="0.01"
-                  value={formData.discountRate}
-                  onChange={(e) => setFormData({ ...formData, discountRate: e.target.value })}
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="taxRate">KDV Oranı (%)</Label>
-                <Input
-                  id="taxRate"
-                  type="number"
-                  step="0.01"
-                  value={formData.taxRate}
-                  onChange={(e) => setFormData({ ...formData, taxRate: e.target.value })}
-                  placeholder="18"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="stock">Stok</Label>
-                <Input
-                  id="stock"
-                  type="number"
-                  value={formData.stock}
-                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="minStock">Minimum Stok</Label>
-                <Input
-                  id="minStock"
-                  type="number"
-                  value={formData.minStock}
-                  onChange={(e) => setFormData({ ...formData, minStock: e.target.value })}
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="maxStock">Maksimum Stok</Label>
-                <Input
-                  id="maxStock"
-                  type="number"
-                  value={formData.maxStock}
-                  onChange={(e) => setFormData({ ...formData, maxStock: e.target.value })}
-                  placeholder="Sınırsız"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="brandId">Marka</Label>
-                <Select value={formData.brandId} onValueChange={(value) => setFormData({ ...formData, brandId: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Marka seçin" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Marka Yok</SelectItem>
-                    {brands.map(brand => (
-                      <SelectItem key={brand.id} value={brand.id}>
-                        {brand.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="supplierId">Tedarikçi</Label>
-                <Select value={formData.supplierId} onValueChange={(value) => setFormData({ ...formData, supplierId: value })}>
+                <Label htmlFor="supplier">Tedarikçi</Label>
+                <Select
+                  value={form.supplier || "none"}
+                  onValueChange={(v) => setField("supplier", v === "none" ? "" : v)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Tedarikçi seçin" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Tedarikçi Yok</SelectItem>
-                    {suppliers.map(supplier => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.name}
+                    <SelectItem value="none">Tedarikçi yok</SelectItem>
+                    {suppliers.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>
+                        {s.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="col-span-2">
-                <Label htmlFor="videoUrl">Video URL (YouTube/Vimeo)</Label>
-                <Input
-                  id="videoUrl"
-                  value={formData.videoUrl}
-                  onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
-                  placeholder="https://youtube.com/..."
-                />
+              <div>
+                <Label htmlFor="categoryId">Kategori</Label>
+                <Select
+                  value={form.categoryId || "none"}
+                  onValueChange={(v) => setField("categoryId", v === "none" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Kategori seçin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Kategori Yok</SelectItem>
+                    {flatCategories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {"—".repeat(cat.depth)} {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="isActive"
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                />
-                <Label htmlFor="isActive">Aktif</Label>
+              <div>
+                <Label htmlFor="desi">Desi</Label>
+                <Select
+                  value={form.desi || "none"}
+                  onValueChange={(v) => setField("desi", v === "none" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Desi seçin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Desi Yok</SelectItem>
+                    {desiList.map((d) => (
+                      <SelectItem key={d.id} value={d.name}>
+                        {d.name} ({d.price} TL)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="isFeatured"
-                  checked={formData.isFeatured}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isFeatured: checked })}
-                />
-                <Label htmlFor="isFeatured">Öne Çıkan</Label>
+              <div>
+                <Label htmlFor="kdv">KDV (%)</Label>
+                <Select
+                  value={form.kdv}
+                  onValueChange={(v) => setField("kdv", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="KDV oranı" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">%0</SelectItem>
+                    <SelectItem value="1">%1</SelectItem>
+                    <SelectItem value="10">%10</SelectItem>
+                    <SelectItem value="20">%20</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-          </TabsContent>
 
-          {/* KATEGORİLER */}
-          <TabsContent value="categories" className="space-y-4 mt-4">
-            <div>
-              <Label>Kategoriler</Label>
-              <p className="text-sm text-gray-500 mb-3">
-                Ürün için bir veya daha fazla kategori seçin
-              </p>
-              <div className="border rounded-lg p-4 max-h-96 overflow-y-auto">
-                {categories.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">Kategori bulunamadı</p>
-                ) : (
-                  <div className="space-y-2">
-                    {categories.map(category => {
-                      const isSelected = selectedCategories.includes(category.id)
-                      const isPrimary = primaryCategoryId === category.id
-
-                      return (
-                        <div
-                          key={category.id}
-                          className={`flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer hover:bg-gray-50 ${
-                            isSelected ? "border-blue-500 bg-blue-50" : ""
-                          }`}
-                          onClick={() => toggleCategory(category.id)}
-                        >
-                          <div className="flex items-center space-x-3">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}}
-                              className="h-4 w-4"
-                            />
-                            <div>
-                              <p className="font-medium">{category.name}</p>
-                              {category.description && (
-                                <p className="text-sm text-gray-500">{category.description}</p>
-                              )}
-                            </div>
-                          </div>
-                          {isSelected && (
-                            <Button
-                              size="sm"
-                              variant={isPrimary ? "default" : "outline"}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPrimaryCategoryId(category.id)
-                              }}
-                            >
-                              {isPrimary ? "Ana Kategori" : "Ana Yap"}
-                            </Button>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-              {selectedCategories.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedCategories.map(catId => {
-                    const cat = categories.find(c => c.id === catId)
-                    if (!cat) return null
-                    return (
-                      <Badge key={catId} variant="secondary" className="flex items-center gap-1">
-                        {cat.name}
-                        {primaryCategoryId === catId && (
-                          <span className="text-xs">(Ana)</span>
-                        )}
-                        <X
-                          className="h-3 w-3 cursor-pointer"
-                          onClick={() => toggleCategory(catId)}
-                        />
-                      </Badge>
-                    )
-                  })}
+              <div className="flex items-center space-x-6 col-span-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="eticaret"
+                    checked={form.eticaret}
+                    onCheckedChange={(v) => setField("eticaret", v)}
+                  />
+                  <Label htmlFor="eticaret">E-Ticaret</Label>
                 </div>
-              )}
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="sopyo"
+                    checked={form.sopyo}
+                    onCheckedChange={(v) => setField("sopyo", v)}
+                  />
+                  <Label htmlFor="sopyo">Sopyo</Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="isFiyatTercih"
+                    checked={form.isFiyatTercih}
+                    onCheckedChange={(v) => setField("isFiyatTercih", v)}
+                  />
+                  <Label htmlFor="isFiyatTercih">Fiyat Tercihi</Label>
+                </div>
+              </div>
             </div>
           </TabsContent>
 
-          {/* BAYİ FİYATLARI */}
-          <TabsContent value="dealer-prices" className="space-y-4 mt-4">
+          {/* ========== FİYATLAR & STOK ========== */}
+          <TabsContent value="pricing" className="space-y-6 mt-4">
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-lg mb-3">Tedarikçi Fiyat</h3>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Bayi Sınıfı Fiyatları</Label>
-                  <p className="text-sm text-gray-500">
-                    Her bayi sınıfı için özel fiyat belirleyin
-                  </p>
+                  <Label htmlFor="tedarikciFiyat">Tedarikçi Fiyatı (TL) *</Label>
+                  <Input
+                    id="tedarikciFiyat"
+                    type="number"
+                    step="0.01"
+                    value={form.tedarikciFiyat}
+                    onChange={(e) => setField("tedarikciFiyat", e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
-                <Button onClick={addDealerPrice} size="sm">
-                  Fiyat Ekle
-                </Button>
+                <div>
+                  <Label htmlFor="productDiscount">Ürün İndirimi (%)</Label>
+                  <Input
+                    id="productDiscount"
+                    type="number"
+                    step="0.01"
+                    value={form.productDiscount}
+                    onChange={(e) => setField("productDiscount", e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
               </div>
+            </div>
 
-              {dealerPrices.length === 0 ? (
-                <div className="border rounded-lg p-8 text-center text-gray-500">
-                  Henüz bayi fiyatı eklenmedi
+            <div>
+              <h3 className="font-semibold text-lg mb-1">Pazaryeri Fiyatları</h3>
+              <p className="text-sm text-muted-foreground mb-3">
+                Tedarikçi fiyatı, kategori ve desi değiştiğinde otomatik hesaplanır.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="bolbolbulFiyat">BolBolBul Fiyatı (TL)</Label>
+                  <Input
+                    id="bolbolbulFiyat"
+                    type="number"
+                    step="0.01"
+                    value={form.bolbolbulFiyat}
+                    onChange={(e) => setField("bolbolbulFiyat", e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {dealerPrices.map((dp, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="grid grid-cols-12 gap-3">
-                        <div className="col-span-5">
-                          <Label>Bayi Sınıfı</Label>
-                          <Select
-                            value={dp.dealerClassId}
-                            onValueChange={(value) => updateDealerPrice(index, "dealerClassId", value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Bayi sınıfı seçin" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {dealerClasses.map(dc => (
-                                <SelectItem key={dc.id} value={dc.id}>
-                                  {dc.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="col-span-3">
-                          <Label>Fiyat (₺)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={dp.price}
-                            onChange={(e) => updateDealerPrice(index, "price", e.target.value)}
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div className="col-span-3">
-                          <Label>İndirim (%)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={dp.discountRate}
-                            onChange={(e) => updateDealerPrice(index, "discountRate", e.target.value)}
-                            placeholder="0"
-                          />
-                        </div>
-                        <div className="col-span-1 flex items-end">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeDealerPrice(index)}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <Label htmlFor="sopyoFiyat">Sopyo Fiyatı (TL)</Label>
+                  <Input
+                    id="sopyoFiyat"
+                    type="number"
+                    step="0.01"
+                    value={form.sopyoFiyat}
+                    onChange={(e) => setField("sopyoFiyat", e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
-              )}
+                <div>
+                  <Label htmlFor="n11Fiyat">N11 Fiyatı (TL)</Label>
+                  <Input
+                    id="n11Fiyat"
+                    type="number"
+                    step="0.01"
+                    value={form.n11Fiyat}
+                    onChange={(e) => setField("n11Fiyat", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="trendyolFiyat">Trendyol Fiyatı (TL)</Label>
+                  <Input
+                    id="trendyolFiyat"
+                    type="number"
+                    step="0.01"
+                    value={form.trendyolFiyat}
+                    onChange={(e) => setField("trendyolFiyat", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="hepsiburadaFiyat">Hepsiburada Fiyatı (TL)</Label>
+                  <Input
+                    id="hepsiburadaFiyat"
+                    type="number"
+                    step="0.01"
+                    value={form.hepsiburadaFiyat}
+                    onChange={(e) => setField("hepsiburadaFiyat", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="pazaramaFiyat">Pazarama Fiyatı (TL)</Label>
+                  <Input
+                    id="pazaramaFiyat"
+                    type="number"
+                    step="0.01"
+                    value={form.pazaramaFiyat}
+                    onChange={(e) => setField("pazaramaFiyat", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-semibold text-lg mb-3">Stok</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="toplamStock">Toplam Stok</Label>
+                  <Input
+                    id="toplamStock"
+                    type="number"
+                    value={form.toplamStock}
+                    onChange={(e) => setField("toplamStock", e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="bolbolbulStock">BolBolBul Stok</Label>
+                  <Input
+                    id="bolbolbulStock"
+                    type="number"
+                    value={form.bolbolbulStock}
+                    onChange={(e) => setField("bolbolbulStock", e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sopyoStock">Sopyo Stok</Label>
+                  <Input
+                    id="sopyoStock"
+                    type="number"
+                    value={form.sopyoStock}
+                    onChange={(e) => setField("sopyoStock", e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
             </div>
           </TabsContent>
 
-          {/* SEO */}
+          {/* ========== SEO & İÇERİK ========== */}
           <TabsContent value="seo" className="space-y-4 mt-4">
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="metaTitle">Meta Başlık</Label>
-                <Input
-                  id="metaTitle"
-                  value={formData.metaTitle}
-                  onChange={(e) => setFormData({ ...formData, metaTitle: e.target.value })}
-                  placeholder="SEO başlığı"
-                />
-              </div>
+            <div>
+              <Label htmlFor="metaTitle">Meta Başlık</Label>
+              <Input
+                id="metaTitle"
+                value={form.metaTitle}
+                onChange={(e) => setField("metaTitle", e.target.value)}
+                placeholder="SEO başlığı"
+              />
+            </div>
 
-              <div>
-                <Label htmlFor="metaDescription">Meta Açıklama</Label>
-                <Textarea
-                  id="metaDescription"
-                  value={formData.metaDescription}
-                  onChange={(e) => setFormData({ ...formData, metaDescription: e.target.value })}
-                  placeholder="SEO açıklaması"
-                  rows={3}
-                />
-              </div>
+            <div>
+              <Label htmlFor="metaDescription">Meta Açıklama</Label>
+              <Textarea
+                id="metaDescription"
+                value={form.metaDescription}
+                onChange={(e) => setField("metaDescription", e.target.value)}
+                placeholder="SEO açıklaması"
+                rows={3}
+              />
+            </div>
 
-              <div>
-                <Label htmlFor="metaKeywords">Anahtar Kelimeler</Label>
-                <Input
-                  id="metaKeywords"
-                  value={formData.metaKeywords}
-                  onChange={(e) => setFormData({ ...formData, metaKeywords: e.target.value })}
-                  placeholder="kelime1, kelime2, kelime3"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="canonicalUrl">Canonical URL</Label>
-                <Input
-                  id="canonicalUrl"
-                  value={formData.canonicalUrl}
-                  onChange={(e) => setFormData({ ...formData, canonicalUrl: e.target.value })}
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div className="border-t pt-4">
-                <h3 className="font-semibold mb-3">Open Graph (Sosyal Medya)</h3>
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="ogTitle">OG Başlık</Label>
-                    <Input
-                      id="ogTitle"
-                      value={formData.ogTitle}
-                      onChange={(e) => setFormData({ ...formData, ogTitle: e.target.value })}
-                      placeholder="Sosyal medya başlığı"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="ogDescription">OG Açıklama</Label>
-                    <Textarea
-                      id="ogDescription"
-                      value={formData.ogDescription}
-                      onChange={(e) => setFormData({ ...formData, ogDescription: e.target.value })}
-                      placeholder="Sosyal medya açıklaması"
-                      rows={2}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="ogImage">OG Görsel URL</Label>
-                    <Input
-                      id="ogImage"
-                      value={formData.ogImage}
-                      onChange={(e) => setFormData({ ...formData, ogImage: e.target.value })}
-                      placeholder="https://..."
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <h3 className="font-semibold mb-3">Twitter Card</h3>
-                <div>
-                  <Label htmlFor="twitterCard">Twitter Card Tipi</Label>
-                  <Select
-                    value={formData.twitterCard}
-                    onValueChange={(value) => setFormData({ ...formData, twitterCard: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seçiniz" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Yok</SelectItem>
-                      <SelectItem value="summary">Summary</SelectItem>
-                      <SelectItem value="summary_large_image">Summary Large Image</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+            <div>
+              <Label htmlFor="detayBilgileri">Detay Bilgileri (HTML)</Label>
+              <Textarea
+                id="detayBilgileri"
+                value={form.detayBilgileri}
+                onChange={(e) => setField("detayBilgileri", e.target.value)}
+                placeholder="Ürün detay bilgileri..."
+                rows={6}
+              />
             </div>
           </TabsContent>
 
-          {/* GÖRSELLER */}
-          <TabsContent value="images" className="space-y-4 mt-4">
-            <div className="border rounded-lg p-8 text-center">
-              <ImageIcon className="h-12 w-12 mx-auto text-gray-400 mb-3" />
-              <p className="text-gray-500">
-                Ürün görselleri ürün kaydedildikten sonra yüklenebilir
-              </p>
+          {/* ========== ÖZELLİKLER ========== */}
+          <TabsContent value="attributes" className="space-y-4 mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <Label>Ürün Özellikleri</Label>
+                <p className="text-sm text-muted-foreground">
+                  Ürün için ek özellikler tanımlayabilirsiniz
+                </p>
+              </div>
+              <Button onClick={addAttribute} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-1" />
+                Özellik Ekle
+              </Button>
             </div>
+
+            {form.attributes.length === 0 ? (
+              <div className="border rounded-lg p-8 text-center text-muted-foreground">
+                Henüz özellik eklenmedi
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {form.attributes.map((attr, index) => (
+                  <div key={index} className="grid grid-cols-12 gap-3 items-end">
+                    <div className="col-span-5">
+                      <Label>Özellik Adı</Label>
+                      <Input
+                        value={attr.Name}
+                        onChange={(e) => updateAttribute(index, "Name", e.target.value)}
+                        placeholder="örneğin: Renk"
+                      />
+                    </div>
+                    <div className="col-span-6">
+                      <Label>Değer</Label>
+                      <Input
+                        value={attr.Value}
+                        onChange={(e) => updateAttribute(index, "Value", e.target.value)}
+                        placeholder="örneğin: Kırmızı"
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeAttribute(index)}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 
-        {/* Footer Actions */}
+        {/* Footer */}
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
           <Button
             variant="outline"
-            onClick={() => {
-              onOpenChange(false)
-              resetForm()
-            }}
+            onClick={() => onOpenChange(false)}
             disabled={loading}
           >
             İptal

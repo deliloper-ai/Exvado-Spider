@@ -39,7 +39,7 @@ interface ImageEditorModalProps {
 }
 
 export type EditorMode = 'edit' | 'search' | 'template' | 'blank'
-export type Tool = 'select' | 'crop' | 'draw' | 'text' | 'filter' | 'pan' | 'transform' | 'bgremove'
+export type Tool = 'select' | 'crop' | 'draw' | 'text' | 'shape' | 'filter' | 'pan' | 'transform' | 'bgremove'
 
 export default function ImageEditorModal({
   open,

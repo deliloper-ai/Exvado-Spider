@@ -1,0 +1,8 @@
+[2026-08-24T14:53:09.214Z] [INFO] --cron: Cron scheduler başlatılıyor
+[2026-08-24T14:55:11.744Z] [INFO] --cron: Cron scheduler başlatılıyor
+[2026-08-24T14:55:12.311Z] [INFO] Cron scheduler başlatıldı
+[2026-08-24T14:55:12.311Z] [INFO]   Full sync      : 0 0 * * * (gece 12)
+[2026-08-24T14:55:12.311Z] [INFO]   Inventory sync : 0 5,14 * * * (sabah 5 + öğlen 2)
+[2026-08-24T14:55:12.311Z] [INFO]   Her sync öncesi tüm tedarikçi tokenleri yenilenir
+[2026-08-24T14:55:12.311Z] [INFO]   Sync ve XML fresh child process olarak spawn edilir
+[2026-08-24T14:55:14.710Z] [INFO] SIGTERM alındı, çıkılıyor

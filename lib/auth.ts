@@ -3,7 +3,7 @@
  * Backend API ile iletişim için fetch wrapper
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 // API Response tipi
 interface ApiResponse<T = any> {
@@ -34,9 +34,9 @@ async function fetchAPI<T>(
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   // Headers
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string>),
   };
 
   // Token varsa ekle

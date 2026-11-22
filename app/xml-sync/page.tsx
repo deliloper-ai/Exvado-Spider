@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -20,573 +20,274 @@ import {
   XCircle,
   AlertTriangle,
   Clock,
-  Calendar,
   FileText,
   Download,
   Loader2,
   Activity,
 } from "lucide-react"
-import { Progress } from "@/components/ui/progress"
+import { xmlService } from "@/lib/api"
+import type { XmlLog, XmlLogsResponse } from "@/lib/api/xml.service"
+import { useToast } from "@/hooks/use-toast"
 
-// XML Generation Log type
-type XMLLog = {
-  id: string
-  timestamp: string
-  status: "success" | "failed" | "running"
-  duration: number
-  totalProducts: number
-  generatedProducts: number
-  failedProducts: number
-  fileSize: string
-  errors: {
-    productSku: string
-    productName: string
-    error: string
-    timestamp: string
-  }[]
+function formatDate(iso: string): string {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'medium' })
+}
+
+function statusBadge(status: 'success' | 'partial' | 'failed') {
+  if (status === 'success') return <Badge className="bg-green-100 text-green-700 border-green-300">Başarılı</Badge>
+  if (status === 'partial') return <Badge className="bg-amber-100 text-amber-700 border-amber-300">Kısmi (hatalar var)</Badge>
+  return <Badge className="bg-red-100 text-red-700 border-red-300">Başarısız</Badge>
 }
 
 export default function XMLSyncPage() {
-  const [currentTime, setCurrentTime] = useState<Date | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [errorSheet, setErrorSheet] = useState<{ open: boolean; log: XMLLog | null }>({
-    open: false,
-    log: null,
-  })
-  const [previewSheet, setPreviewSheet] = useState(false)
+  const { toast } = useToast()
+  const [data, setData] = useState<XmlLogsResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [errorSheet, setErrorSheet] = useState<{ open: boolean; log: XmlLog | null }>({ open: false, log: null })
 
-  useEffect(() => {
-    setCurrentTime(new Date())
-    const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
-    return () => clearInterval(timer)
+  const fetchLogs = useCallback(async () => {
+    try {
+      const res = await xmlService.getLogs(20)
+      if (res.success && res.data) setData(res.data)
+    } catch {
+      // silent
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const formatNumber = (num: number) => {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".")
-  }
+  useEffect(() => {
+    fetchLogs()
+    // generate sırasında polling 3sn, idle 30sn
+    const interval = setInterval(() => fetchLogs(), generating ? 3000 : 30000)
+    return () => clearInterval(interval)
+  }, [fetchLogs, generating])
 
-  // Sample XML generation logs
-  const [logs, setLogs] = useState<XMLLog[]>([
-    {
-      id: "1",
-      timestamp: "2024-01-15 14:35:22",
-      status: "success",
-      duration: 127,
-      totalProducts: 25840,
-      generatedProducts: 25840,
-      failedProducts: 0,
-      fileSize: "12.5 MB",
-      errors: [],
-    },
-    {
-      id: "2",
-      timestamp: "2024-01-15 12:18:45",
-      status: "success",
-      duration: 118,
-      totalProducts: 25320,
-      generatedProducts: 25320,
-      failedProducts: 0,
-      fileSize: "12.3 MB",
-      errors: [],
-    },
-    {
-      id: "3",
-      timestamp: "2024-01-15 10:05:12",
-      status: "failed",
-      duration: 45,
-      totalProducts: 24890,
-      generatedProducts: 18234,
-      failedProducts: 6656,
-      fileSize: "8.9 MB",
-      errors: [
-        {
-          productSku: "PRD-001",
-          productName: "Premium Kablosuz Kulaklık",
-          error: "Missing required field: price",
-          timestamp: "2024-01-15 10:05:15",
-        },
-        {
-          productSku: "PRD-002",
-          productName: "Akıllı Saat Pro",
-          error: "Invalid XML character in description",
-          timestamp: "2024-01-15 10:05:18",
-        },
-        {
-          productSku: "PRD-003",
-          productName: "Mekanik Klavye RGB",
-          error: "Missing required field: stock",
-          timestamp: "2024-01-15 10:05:22",
-        },
-      ],
-    },
-    {
-      id: "4",
-      timestamp: "2024-01-14 18:22:33",
-      status: "success",
-      duration: 132,
-      totalProducts: 24650,
-      generatedProducts: 24650,
-      failedProducts: 0,
-      fileSize: "12.0 MB",
-      errors: [],
-    },
-  ])
-
-  const latestLog = logs[0]
-
-  const handleGenerateXML = () => {
-    setIsGenerating(true)
-    setProgress(0)
-
-    // Simulate XML generation progress
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setIsGenerating(false)
-
-          // Add new log entry
-          const newLog: XMLLog = {
-            id: Date.now().toString(),
-            timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-            status: "success",
-            duration: Math.floor(Math.random() * 60) + 90,
-            totalProducts: 26000 + Math.floor(Math.random() * 1000),
-            generatedProducts: 26000 + Math.floor(Math.random() * 1000),
-            failedProducts: 0,
-            fileSize: "12.7 MB",
-            errors: [],
-          }
-          setLogs([newLog, ...logs])
-
-          return 100
-        }
-        return prev + 10
+  const handleGenerate = async () => {
+    setGenerating(true)
+    try {
+      await xmlService.generate()
+      toast({
+        title: "XML üretimi başlatıldı",
+        description: "Arka planda envanter ürünleri XML'e yazılıyor",
       })
-    }, 300)
-  }
-
-  const handlePreview = () => {
-    setPreviewSheet(true)
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "success":
-        return (
-          <Badge className="bg-green-500 text-white text-xs flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" />
-            Başarılı
-          </Badge>
-        )
-      case "failed":
-        return (
-          <Badge variant="destructive" className="text-xs flex items-center gap-1">
-            <XCircle className="h-3 w-3" />
-            Başarısız
-          </Badge>
-        )
-      case "running":
-        return (
-          <Badge className="bg-blue-500 text-white text-xs flex items-center gap-1">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Oluşturuluyor
-          </Badge>
-        )
-      default:
-        return null
+      // 30 saniye sonra refresh
+      setTimeout(() => {
+        fetchLogs()
+        setGenerating(false)
+      }, 30000)
+    } catch (err: any) {
+      toast({ title: "Hata", description: err.message || "XML başlatılamadı", variant: "destructive" })
+      setGenerating(false)
     }
   }
 
-  // Sample XML preview content
-  const xmlPreview = `<?xml version="1.0" encoding="UTF-8"?>
-<products>
-  <product>
-    <id>1</id>
-    <sku>PRD-001</sku>
-    <name><![CDATA[Premium Kablosuz Kulaklık]]></name>
-    <description><![CDATA[Yüksek kaliteli ses deneyimi sunan kablosuz kulaklık]]></description>
-    <price>750.00</price>
-    <currency>TRY</currency>
-    <stock>85</stock>
-    <category><![CDATA[Elektronik > Ses Sistemleri]]></category>
-    <brand>TechPro</brand>
-    <image>https://example.com/images/prd-001.jpg</image>
-    <url>https://example.com/product/prd-001</url>
-  </product>
-  <product>
-    <id>2</id>
-    <sku>PRD-002</sku>
-    <name><![CDATA[Akıllı Saat Pro]]></name>
-    <description><![CDATA[Gelişmiş sağlık ve fitness takibi özellikleri]]></description>
-    <price>1500.00</price>
-    <currency>TRY</currency>
-    <stock>45</stock>
-    <category><![CDATA[Elektronik > Giyilebilir Teknoloji]]></category>
-    <brand>SmartTech</brand>
-    <image>https://example.com/images/prd-002.jpg</image>
-    <url>https://example.com/product/prd-002</url>
-  </product>
-  <!-- ... ve diğer ${formatNumber(latestLog?.totalProducts || 0)} ürün -->
-</products>`
+  const handleDownload = () => {
+    window.open(xmlService.getDownloadUrl(), '_blank')
+  }
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        </div>
+      </MainLayout>
+    )
+  }
+
+  const lastSuccess = data?.logs.find(l => l.status === 'success')
 
   return (
     <MainLayout>
-      <div className="p-6 space-y-6">
+      <div className="p-8 space-y-6 bg-gray-50/50 dark:bg-gray-900">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-              <FileCode className="h-5 w-5 text-blue-600" />
-              XML Sync - Ürün Feed Oluşturma
-            </h1>
-            <p className="text-xs text-muted-foreground mt-1">
-              tum_urunler.xml dosyası oluşturma ve güncelleme
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">XML Üretimi</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Envanterdeki aktif ürünler için <code className="text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">tum_urunler.xml</code> üret
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-xs text-muted-foreground flex items-center gap-2">
-              <Activity className="h-3 w-3 animate-pulse text-green-600" />
-              {currentTime ? currentTime.toLocaleTimeString('tr-TR') : '--:--:--'}
-            </div>
+            <Button variant="outline" size="sm" onClick={fetchLogs} className="bg-white">
+              <RefreshCw className="h-4 w-4 mr-2" /> Yenile
+            </Button>
+            {data?.currentFile.exists && (
+              <Button variant="outline" size="sm" onClick={handleDownload} className="bg-white">
+                <Download className="h-4 w-4 mr-2" /> XML İndir ({data.currentFile.sizeText})
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={handleGenerate}
+              disabled={generating}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+            >
+              {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileCode className="h-4 w-4 mr-2" />}
+              {generating ? 'Üretiliyor...' : 'XML Üret'}
+            </Button>
           </div>
         </div>
 
-        {/* Main Action Card */}
-        <Card className="border-2 border-blue-200 dark:border-blue-900">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <FileCode className="h-5 w-5 text-blue-600" />
-              XML Dosyası: tum_urunler.xml
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Current Status */}
-            {latestLog && (
-              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold">Son Güncelleme Durumu</span>
-                  {getStatusBadge(latestLog.status)}
+        {/* Mevcut dosya kartı */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="shadow-sm">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/40">
+                  <FileText className="h-5 w-5 text-blue-600" />
                 </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Tarih & Saat</p>
-                    <p className="text-sm font-semibold mt-1">{latestLog.timestamp}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Süre</p>
-                    <p className="text-sm font-semibold mt-1">{latestLog.duration} saniye</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Toplam Ürün</p>
-                    <p className="text-sm font-semibold mt-1">{formatNumber(latestLog.totalProducts)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Dosya Boyutu</p>
-                    <p className="text-sm font-semibold mt-1">{latestLog.fileSize}</p>
-                  </div>
-                </div>
-
-                {latestLog.status === "success" && (
-                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm">
-                    <CheckCircle className="h-4 w-4" />
-                    <span>{formatNumber(latestLog.generatedProducts)} ürün başarıyla XML'e eklendi</span>
-                  </div>
-                )}
-
-                {latestLog.status === "failed" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm">
-                      <XCircle className="h-4 w-4" />
-                      <span>{formatNumber(latestLog.failedProducts)} ürün eklenemedi</span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 border-red-300 hover:bg-red-50"
-                      onClick={() => setErrorSheet({ open: true, log: latestLog })}
-                    >
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                      {latestLog.errors.length} Hata Detayı
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Progress Bar for Generation */}
-            {isGenerating && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-blue-600 font-medium">XML Oluşturuluyor...</span>
-                  <span className="text-muted-foreground">%{progress}</span>
-                </div>
-                <Progress value={progress} className="h-2" />
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <Button
-                onClick={handleGenerateXML}
-                disabled={isGenerating}
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Oluşturuluyor...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    XML Sync Başlat
-                  </>
-                )}
-              </Button>
-
-              <Button
-                onClick={handlePreview}
-                variant="outline"
-                className="flex-1"
-                disabled={!latestLog}
-              >
-                <Eye className="h-4 w-4 mr-2" />
-                XML Önizleme
-              </Button>
-
-              <Button
-                variant="outline"
-                disabled={!latestLog}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                İndir
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Summary Stats */}
-        <div className="grid gap-3 md:grid-cols-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-muted-foreground">Toplam İşlem</p>
-                  <p className="text-2xl font-bold mt-1">{logs.length}</p>
-                </div>
-                <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                  <FileCode className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Başarılı</p>
-                  <p className="text-2xl font-bold mt-1 text-green-600">
-                    {logs.filter(l => l.status === "success").length}
+                  <p className="text-xs text-gray-500">Mevcut XML</p>
+                  <p className="text-lg font-bold">
+                    {data?.currentFile.exists ? data.currentFile.sizeText : 'Yok'}
                   </p>
                 </div>
-                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                </div>
               </div>
+              <p className="text-xs text-gray-400">
+                {data?.currentFile.modifiedAt
+                  ? `Son: ${formatDate(data.currentFile.modifiedAt)}`
+                  : 'Henüz üretilmedi'}
+              </p>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+          <Card className="shadow-sm">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950/40">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Başarısız</p>
-                  <p className="text-2xl font-bold mt-1 text-red-600">
-                    {logs.filter(l => l.status === "failed").length}
+                  <p className="text-xs text-gray-500">Son Başarılı</p>
+                  <p className="text-lg font-bold">
+                    {lastSuccess ? lastSuccess.generatedProducts.toLocaleString('tr-TR') : '-'} ürün
                   </p>
                 </div>
-                <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
-                  <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                </div>
               </div>
+              <p className="text-xs text-gray-400">
+                {lastSuccess ? formatDate(lastSuccess.timestamp) : 'Hiç üretilmedi'}
+              </p>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Son Dosya</p>
-                  <p className="text-2xl font-bold mt-1 text-blue-600">{latestLog?.fileSize || "-"}</p>
+          <Card className="shadow-sm">
+            <CardContent className="p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40">
+                  <Clock className="h-5 w-5 text-amber-600" />
                 </div>
-                <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-950 flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div>
+                  <p className="text-xs text-gray-500">Toplam Üretim</p>
+                  <p className="text-lg font-bold">{data?.logs.length ?? 0}</p>
                 </div>
               </div>
+              <p className="text-xs text-gray-400">Son 20 kayıt aşağıda</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Generation History */}
-        <Card>
+        {generating && (
+          <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="relative flex h-3 w-3">
+                <div className="animate-ping absolute h-full w-full rounded-full bg-blue-400 opacity-75"></div>
+                <div className="relative rounded-full h-3 w-3 bg-blue-500"></div>
+              </div>
+              <div>
+                <p className="font-medium text-blue-900 dark:text-blue-100">XML üretiliyor</p>
+                <p className="text-xs text-blue-700 dark:text-blue-300">İşlem arka planda devam ediyor — sayfa 3 saniyede bir güncellenir</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Loglar tablosu */}
+        <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="h-4 w-4 text-blue-600" />
-              XML Oluşturma Geçmişi
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Üretim Geçmişi
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {logs.map((log) => (
-                <div
-                  key={log.id}
-                  className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{log.timestamp}</span>
-                    </div>
-                    {getStatusBadge(log.status)}
-                  </div>
-
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Ürün</p>
-                      <p className="text-sm font-semibold">{formatNumber(log.generatedProducts)}/{formatNumber(log.totalProducts)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Süre</p>
-                      <p className="text-sm font-semibold">{log.duration}s</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Boyut</p>
-                      <p className="text-sm font-semibold">{log.fileSize}</p>
-                    </div>
-
-                    {log.errors.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600"
-                        onClick={() => setErrorSheet({ open: true, log })}
-                      >
-                        <AlertTriangle className="h-3 w-3 mr-1" />
-                        Hatalar
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {!data?.logs.length ? (
+              <div className="text-center py-12 text-gray-500">
+                <FileCode className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p className="font-medium">Henüz XML üretilmedi</p>
+                <p className="text-sm mt-1">Yukarıdaki "XML Üret" butonuna basarak başlatın</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                      <th className="text-left p-2.5">Tarih</th>
+                      <th className="text-left p-2.5">Durum</th>
+                      <th className="text-right p-2.5">Süre</th>
+                      <th className="text-right p-2.5">Toplam</th>
+                      <th className="text-right p-2.5">Üretilen</th>
+                      <th className="text-right p-2.5">Hata</th>
+                      <th className="text-center p-2.5">İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.logs.map(log => (
+                      <tr key={log.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50/50">
+                        <td className="p-2.5 text-gray-600">{formatDate(log.timestamp)}</td>
+                        <td className="p-2.5">{statusBadge(log.status)}</td>
+                        <td className="p-2.5 text-right">{log.duration > 0 ? `${log.duration}s` : '-'}</td>
+                        <td className="p-2.5 text-right font-medium">{log.totalProducts.toLocaleString('tr-TR')}</td>
+                        <td className="p-2.5 text-right text-green-700">{log.generatedProducts.toLocaleString('tr-TR')}</td>
+                        <td className="p-2.5 text-right">
+                          {log.failedProducts > 0 ? (
+                            <span className="text-red-600 font-medium">{log.failedProducts}</span>
+                          ) : (
+                            <span className="text-gray-400">0</span>
+                          )}
+                        </td>
+                        <td className="p-2.5 text-center">
+                          {log.errors.length > 0 && (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setErrorSheet({ open: true, log })}>
+                              <Eye className="h-3.5 w-3.5 mr-1" /> Hatalar
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Error Details Sheet */}
-        <Sheet open={errorSheet.open} onOpenChange={(open) => setErrorSheet({ open, operation: null })}>
-          <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-6">
-            <SheetHeader className="mb-6">
-              <SheetTitle>XML Oluşturma Hataları</SheetTitle>
+        {/* Hata detay sheet */}
+        <Sheet open={errorSheet.open} onOpenChange={(o) => setErrorSheet({ open: o, log: o ? errorSheet.log : null })}>
+          <SheetContent className="w-[600px] sm:max-w-2xl overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                Hata Detayları
+              </SheetTitle>
               <SheetDescription>
-                {errorSheet.log?.timestamp} - Hata Detayları
+                {errorSheet.log && `${formatDate(errorSheet.log.timestamp)} — ${errorSheet.log.errors.length} hata`}
               </SheetDescription>
             </SheetHeader>
-
-            {errorSheet.log && (
-              <div className="space-y-4">
-                {/* Summary */}
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Toplam Ürün</span>
-                    <span className="text-sm font-semibold">{formatNumber(errorSheet.log.totalProducts)}</span>
+            <div className="mt-6 space-y-2">
+              {errorSheet.log?.errors.map((e, i) => (
+                <div key={i} className="border border-red-200 rounded-lg p-3 bg-red-50/50">
+                  <div className="flex items-start justify-between mb-1">
+                    <span className="text-xs font-mono text-gray-500">{e.sku}</span>
+                    <XCircle className="h-3.5 w-3.5 text-red-500" />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Başarılı</span>
-                    <span className="text-sm font-semibold text-green-600">{formatNumber(errorSheet.log.generatedProducts)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground">Başarısız</span>
-                    <span className="text-sm font-semibold text-red-600">{formatNumber(errorSheet.log.failedProducts)}</span>
-                  </div>
+                  <div className="text-sm font-medium text-gray-900 mb-1">{e.name}</div>
+                  <div className="text-xs text-red-700">{e.error}</div>
                 </div>
-
-                {/* Errors List */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold">Hata Detayları</h3>
-                  {errorSheet.log.errors.map((error, index) => (
-                    <div
-                      key={index}
-                      className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4"
-                    >
-                      <div className="flex items-start gap-3">
-                        <XCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <Badge variant="destructive" className="text-xs">
-                              {error.productSku}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              {error.timestamp}
-                            </span>
-                          </div>
-                          <p className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">
-                            {error.productName}
-                          </p>
-                          <p className="text-sm text-red-700 dark:text-red-300">
-                            {error.error}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </SheetContent>
-        </Sheet>
-
-        {/* Preview Sheet */}
-        <Sheet open={previewSheet} onOpenChange={setPreviewSheet}>
-          <SheetContent className="w-full sm:max-w-3xl overflow-y-auto p-6">
-            <SheetHeader className="mb-6">
-              <SheetTitle>XML Önizleme</SheetTitle>
-              <SheetDescription>
-                tum_urunler.xml - {latestLog?.timestamp}
-              </SheetDescription>
-            </SheetHeader>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Badge variant="outline" className="text-xs">
-                  {formatNumber(latestLog?.totalProducts || 0)} ürün
-                </Badge>
-                <Badge variant="outline" className="text-xs">
-                  {latestLog?.fileSize}
-                </Badge>
-              </div>
-
-              <div className="bg-gray-900 dark:bg-gray-950 rounded-lg p-4 overflow-x-auto">
-                <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
-                  {xmlPreview}
-                </pre>
-              </div>
-
-              <div className="flex gap-2">
-                <Button className="flex-1">
-                  <Download className="h-4 w-4 mr-2" />
-                  XML Dosyasını İndir
-                </Button>
-                <Button variant="outline">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Kopyala
-                </Button>
-              </div>
+              ))}
             </div>
           </SheetContent>
         </Sheet>
