@@ -12,7 +12,7 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN ./node_modules/.bin/prisma generate
+RUN npx --yes prisma@6.19.2 generate
 RUN npm run build
 
 FROM node:20-alpine AS runner
