@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     const supplier = searchParams.get('supplier')
 
     const projectRoot = path.resolve(process.cwd())
-    const workerPath = path.join(projectRoot, 'worker-dist', 'token-refresher', 'index.js')
-    const tsxPath = process.execPath
+    const workerPath = path.join(projectRoot, 'worker', 'token-refresher', 'index.ts')
+    const tsxPath = 'tsx'
     const logsDir = path.join(projectRoot, 'worker', 'logs')
     if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
     const logPath = path.join(logsDir, 'token-refresh.log')

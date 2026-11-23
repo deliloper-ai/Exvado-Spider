@@ -41,8 +41,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const mode = searchParams.get('mode') === 'inventory' ? 'inventory-only' : 'full'
 
     const projectRoot = path.resolve(process.cwd())
-    const workerPath = path.join(projectRoot, 'worker-dist', 'index.js')
-    const tsxPath = process.execPath
+    const workerPath = path.join(projectRoot, 'worker', 'index.ts')
+    const tsxPath = 'tsx'
     const logsDir = path.join(projectRoot, 'worker', 'logs')
     if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
     const spawnLogPath = path.join(logsDir, 'spawn.log')

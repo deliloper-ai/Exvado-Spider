@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const projectRoot = path.resolve(process.cwd())
-    const workerPath = path.join(projectRoot, 'worker-dist', 'xml-generator', 'index.js')
-    const tsxPath = process.execPath
+    const workerPath = path.join(projectRoot, 'worker', 'xml-generator', 'index.ts')
+    const tsxPath = 'tsx'
     const logsDir = path.join(projectRoot, 'worker', 'logs')
     if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
     const logPath = path.join(logsDir, 'xml-generator.log')
