@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: 'standalone',
   serverExternalPackages: ['@prisma/client'],
+  images: {
+    unoptimized: true,
+  },
   typescript: {
     // Worker dosyaları runtime'da tsx ile çalışıyor, Next.js build pipeline'ında
     // type-check'e gerek yok. tsconfig.json'da exclude'a rağmen Next.js scan
