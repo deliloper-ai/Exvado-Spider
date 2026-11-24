@@ -12,18 +12,11 @@ const nextConfig: NextConfig = {
     // ediyor — bu flag ile build'i bloklamasın.
     ignoreBuildErrors: true,
   },
-  async headers() {
+  async rewrites() {
     return [
-      {
-        // tum_urunler.xml — public, asla cache'leme (her isteğe en güncel halini ver)
-        source: '/tum_urunler.xml',
-        headers: [
-          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
-          { key: 'Pragma', value: 'no-cache' },
-          { key: 'Expires', value: '0' },
-          { key: 'Content-Type', value: 'application/xml; charset=utf-8' },
-        ],
-      },
+      // tum_urunler.xml is written at runtime by worker — serve via API route
+      // so Next.js doesn't 404 from its static manifest
+      { source: '/tum_urunler.xml', destination: '/api/xml' },
     ]
   },
   webpack: (config, { isServer }) => {
