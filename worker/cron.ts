@@ -24,11 +24,10 @@ import { logger } from './helpers/logger'
 const FULL_SCHEDULE = process.env.SYNC_CRON_FULL || '0 0 * * *'              // 00:00
 const INVENTORY_SCHEDULE = process.env.SYNC_CRON_INVENTORY || '0 5,14 * * *' // 05:00 ve 14:00
 
-// Bundled build çalışırken __dirname = worker-dist/. Kaynak modda = worker/. İkisinde de PROJECT_ROOT doğru çözülür.
 const PROJECT_ROOT = path.resolve(__dirname, '..')
-const NODE_PATH = process.execPath
-const WORKER_ENTRY = path.join(PROJECT_ROOT, 'worker-dist', 'index.js')
-const XML_ENTRY = path.join(PROJECT_ROOT, 'worker-dist', 'xml-generator', 'index.js')
+const TSX_BIN = path.join(PROJECT_ROOT, 'node_modules', '.bin', 'tsx')
+const WORKER_ENTRY = path.join(PROJECT_ROOT, 'worker', 'index.ts')
+const XML_ENTRY = path.join(PROJECT_ROOT, 'worker', 'xml-generator', 'index.ts')
 
 logger.info(`Cron scheduler başlatıldı`)
 logger.info(`  Full sync      : ${FULL_SCHEDULE} (gece 12)`)
@@ -38,7 +37,7 @@ logger.info(`  Sync ve XML fresh child process olarak spawn edilir`)
 
 function spawnScript(label: string, args: string[]): Promise<{ ok: boolean; code: number | null }> {
   return new Promise((resolve) => {
-    const child = spawn(NODE_PATH, args, {
+    const child = spawn(TSX_BIN, args, {
       cwd: PROJECT_ROOT,
       stdio: 'inherit',
       env: { ...process.env },
