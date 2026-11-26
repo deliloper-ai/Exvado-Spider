@@ -27,7 +27,6 @@ const INVENTORY_SCHEDULE = process.env.SYNC_CRON_INVENTORY || '0 5,14 * * *' // 
 const PROJECT_ROOT = path.resolve(__dirname, '..')
 const TSX_BIN = path.join(PROJECT_ROOT, 'node_modules', '.bin', 'tsx')
 const WORKER_ENTRY = path.join(PROJECT_ROOT, 'worker', 'index.ts')
-const XML_ENTRY = path.join(PROJECT_ROOT, 'worker', 'xml-generator', 'index.ts')
 
 logger.info(`Cron scheduler başlatıldı`)
 logger.info(`  Full sync      : ${FULL_SCHEDULE} (gece 12)`)
@@ -74,11 +73,8 @@ async function refreshTokensThenSync(label: 'FULL' | 'INVENTORY') {
   const syncRes = await spawnScript(`${label}-sync`, syncArgs)
   logger.info(`Cron (${label}) sync bitti (exit=${syncRes.code})`)
 
-  // 3) XML — fresh child spawn
-  logger.info(`Cron (${label}): XML üretimi spawn ediliyor`)
-  const xmlRes = await spawnScript(`${label}-xml`, [XML_ENTRY])
-  logger.info(`Cron (${label}) XML bitti (exit=${xmlRes.code})`)
-
+  // XML üretimi host cron tarafından yapılır (regen-xml.sh) — panel container'ına
+  // yazması gerektiği için worker burada üretmez. Sync bittikten 1 saat sonra çalışır.
   logger.info(`Cron (${label}) ============= AKIŞ TAMAMLANDI =============`)
 }
 
